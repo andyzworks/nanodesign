@@ -1,174 +1,140 @@
 # NanoDesign
 
-NanoDesign is a multi-task framework for conditional biomolecular design. It uses one task-conditioned SE(3)-equivariant model to jointly generate residue-level structure and sequence for protein binders, antibody CDRs, and RNA.
+NanoDesign 是一个用于生物分子设计的多任务 AI 框架。
 
-The current implementation is a research prototype and benchmark scaffold. It provides an end-to-end path from versioned molecular examples to corruption, training, hidden-label evaluation, and conditional sampling. Its present output is a coarse residue-frame representation with three canonical anchor atoms per residue; it is not yet a full-atom molecular design system.
+它希望用同一个模型，同时完成以下三类任务：
 
-## Supported design tasks
+- 蛋白质或多肽 Binder 设计
+- 抗体 CDR 设计
+- RNA 设计
 
-| Task | Fixed context | Generated region | Output |
-| --- | --- | --- | --- |
-| Peptide/protein binder design | Target protein | Binder residues | Binder tokens, residue translations, rotations, and anchors |
-| Antibody design | Antigen and antibody framework | CDR residues | CDR tokens, residue translations, rotations, and anchors |
-| RNA design | Optional task metadata; the current RNA task is unconditional | RNA residues | RNA tokens, coarse residue translations, rotations, and anchors |
+模型可以同时生成氨基酸或核苷酸序列，以及分子的粗粒度三维结构。
 
-All tasks share one model and one data contract. `task_id`, polymer type, molecular role, chain, entity, position, corruption time, and design mask tell the shared trunk how each residue should be interpreted.
+> 当前版本属于研究原型，已经完成端到端训练和生成流程，但还不是成熟的全原子分子设计系统。
 
-## Framework architecture
+## NanoDesign 能做什么？
+
+| 任务 | 保持不变的部分 | 模型设计的部分 |
+| --- | --- | --- |
+| Binder 设计 | 目标蛋白 | Binder 的序列和三维结构 |
+| 抗体设计 | 抗原和抗体 Framework | CDR 的序列和三维结构 |
+| RNA 设计 | 当前版本没有固定结构条件 | RNA 序列和粗粒度三维结构 |
+
+模型只修改指定的设计区域，其他部分在加噪、训练和生成过程中都会保持固定。
+
+## 整体架构
 
 ```mermaid
 flowchart LR
-    A[Raw structures] --> B[Task-specific preprocessing]
-    B --> C[Versioned NanoDesign examples]
-    C --> D[Joint frame and token corruption]
-    D --> E[Task-conditioned node and pair encoders]
-    E --> F[Shared IPA / SE(3) trunk]
-    F --> G1[Translation and rotation heads]
-    F --> G2[Polymer-aware token head]
-    G1 --> H[Canonical anchor reconstruction]
-    G1 --> I[Joint task-balanced loss]
-    G2 --> I
-    H --> I
-    F --> J[Iterative conditional sampler]
-    J --> K[NPZ and anchor-atom PDB outputs]
+    A[蛋白质或 RNA 结构] --> B[数据预处理]
+    B --> C[统一数据格式]
+    C --> D[给设计区域加噪]
+    D --> E[任务条件编码]
+    E --> F[共享 SE3 / IPA 模型]
+    F --> G1[预测三维结构]
+    F --> G2[预测分子序列]
+    G1 --> H[迭代生成结果]
+    G2 --> H
+    H --> I[NPZ / PDB 输出]
 ```
 
-### 1. Versioned data contract
+整个流程可以简单理解为：
 
-Each example describes a complete design problem rather than only a coordinate tensor. Important fields include:
+1. 把 Binder、抗体和 RNA 转换成统一的数据格式。
+2. 对需要设计的序列和三维结构加入噪声。
+3. 告诉模型当前是什么任务、哪些区域可以修改。
+4. 模型根据固定上下文恢复正确的结构和序列。
+5. 推理时从随机状态开始，逐步生成新的设计结果。
 
-- task, polymer, role, chain, entity, and source residue identifiers;
-- clean residue tokens with disjoint protein and RNA vocabularies;
-- residue-frame translations and SO(3) rotations;
-- three observed anchor atoms and an anchor-validity mask;
-- `design_mask`, which exactly identifies the residues the model may change;
-- `res_mask`, which distinguishes real residues from batch padding.
+## 核心设计
 
-Datasets are stored as immutable NPZ examples accompanied by a JSONL manifest, source lock, per-file SHA256 checksums, and a whole-dataset fingerprint. This makes data changes visible and allows checkpoints to be tied to a specific dataset version.
+### 1. 三种任务共用一个模型
 
-### 2. Joint corruption process
+NanoDesign 不为 Binder、抗体和 RNA 分别训练三个完全独立的模型，而是使用一个共享模型。
 
-NanoDesign trains the model to recover clean structure and sequence from a shared noisy state:
+输入中会标记：
 
-- designed translations interpolate between centered Gaussian noise and clean coordinates;
-- designed rotations interpolate on SO(3) between random and clean frames;
-- designed sequence tokens are replaced with a mask token according to corruption time;
-- fixed-context tokens and frames remain unchanged.
+- 当前任务类型
+- 当前残基属于蛋白质还是 RNA
+- 当前区域是 Target、Binder、Antigen、Framework、CDR 还是 RNA
+- 当前残基属于哪条链
+- 哪些区域允许模型修改
 
-The same design region is used for structure and sequence, preventing a task from silently optimizing a different residue subset for each modality.
+这样模型可以学习不同任务之间共享的三维几何规律。
 
-### 3. Task-conditioned encoders
+### 2. 同时设计序列和结构
 
-The node encoder combines embeddings for:
+模型会同时预测：
 
-- corrupted residue tokens;
-- task identity;
-- protein or RNA polymer identity;
-- target, binder, antigen, framework, CDR, or RNA role;
-- chain and entity identity;
-- residue position;
-- translation, rotation, and token corruption times;
-- the design mask.
+- 每个残基的三维位置
+- 每个残基的三维方向
+- 蛋白质氨基酸或 RNA 核苷酸类型
+- 用于表示局部几何的三个关键原子位置
 
-The pair encoder adds relative residue positions, current inter-residue distance bins, same-chain/entity/polymer/role indicators, and pairwise design-state indicators.
+蛋白质和 RNA 使用不同的 token 编号，避免把氨基酸和核苷酸混淆。
 
-### 4. Shared SE(3) trunk
+### 3. 固定上下文不会被改变
 
-All three tasks use one Invariant Point Attention trunk. Each block performs:
+对于 Binder 设计，Target 保持固定；对于抗体设计，Antigen 和 Framework 保持固定。
 
-1. geometry-aware invariant point attention over the current residue frames;
-2. masked sequence-style transformer communication;
-3. a structure transition;
-4. an SE(3) residue-frame update;
-5. an optional pair-feature update for the next block.
+这个限制会在数据加噪、模型内部结构更新、迭代生成和最终输出阶段持续生效。因此，模型只会生成用户指定的设计区域。
 
-Frame updates are multiplied by `design_mask`, so fixed target, antigen, and framework frames are protected inside every model block rather than repaired only after prediction.
+### 4. 统一的三维几何模型
 
-### 5. Output heads and objective
+NanoDesign 使用 Invariant Point Attention（IPA）处理三维结构。
 
-The model predicts clean residue translations, rotations, canonical anchor coordinates, and unified token logits. Invalid protein/RNA token classes are removed during generation.
+模型不仅考虑序列信息，还会利用残基之间的距离、方向、链关系和分子角色。整体模型对分子的旋转和平移具有几何一致性，更适合处理三维分子结构。
 
-The training objective combines:
+## 训练和生成
 
-- translation loss;
-- SO(3) geodesic rotation loss;
-- anchor-coordinate loss;
-- masked-token cross-entropy.
+训练时，NanoDesign 会给设计区域的坐标、方向和序列加入噪声，然后让模型恢复原始结构和序列。三个任务会进行平衡计算，避免某一个任务完全主导训练。
 
-Losses are averaged per example and then macro-averaged across tasks represented in the batch. This prevents a task with more residues or examples from automatically dominating the objective.
+生成时，设计区域从随机坐标、随机方向和 Mask 序列开始。模型反复预测更合理的结果，逐步生成最终设计。
 
-### 6. Conditional generation
+结果可以输出为：
 
-At inference time, NanoDesign initializes only the designed region from translation, rotation, and token priors. The sampler repeatedly predicts the clean endpoint and advances the noisy frames toward that prediction. Fixed context is restored after every integration step. The final token distribution is masked to the vocabulary of the residue's polymer type.
+- NPZ：保存序列、坐标和旋转矩阵
+- PDB：保存关键原子，用于结构查看和后续处理
 
-Generated results can be written as:
+## 当前已经实现
 
-- NPZ files containing tokens, translations, rotations, and anchors;
-- PDB files containing canonical anchor atoms for visualization and downstream processing.
+- Binder、抗体 CDR 和 RNA 三类任务
+- 一个共享的多任务模型
+- 序列和粗粒度三维结构联合生成
+- 固定上下文保护
+- 蛋白质和 RNA 独立词表
+- 数据校验、来源记录和 SHA256 指纹
+- 单 GPU 和多 GPU 训练
+- Checkpoint 保存和恢复训练
+- 隐藏标签评分流程
+- 位置、旋转、序列恢复率和界面接触等评估指标
+- NPZ 和 PDB 预测结果输出
+- 三类任务的 H100 端到端 smoke test
 
-## What the framework currently provides
+## 当前限制
 
-- One shared model for binder, antibody CDR, and RNA design.
-- Joint sequence and coarse-structure generation.
-- Strict fixed-context semantics during corruption, model updates, and sampling.
-- Polymer-safe protein/RNA vocabularies.
-- Deterministic preprocessing and tamper-detecting dataset fingerprints.
-- Single-GPU and distributed data-parallel training.
-- Parameter, optimizer-step, sample, and residue budgets for benchmark tracks.
-- Checkpointing, deterministic stochastic-input replay, resume integrity checks, and learning-curve AUC.
-- A minimal submission interface with `build_model`, `build_optimizer`, and `run_batch` entry points.
-- A hidden-label scoring path that removes clean design labels before submission code receives a batch.
-- Metrics for joint loss, translation and anchor error, rotation error, token recovery, interface contacts, and fixed-context drift.
-- End-to-end prediction with trajectory-capable iterative sampling.
+NanoDesign 目前主要证明了完整流程可以运行和学习，还不能证明模型具有可靠的科学泛化能力。
 
-## Runtime and benchmark layers
+主要限制包括：
 
-NanoDesign separates four concerns:
+- 目前只有很小的公开测试数据，还没有大规模、严格去重的数据集。
+- 输出是残基级粗粒度结构，不包含完整侧链和全部原子。
+- 自由生成效果明显弱于中间噪声状态下的结构恢复。
+- 旋转预测仍然比较弱。
+- 抗体 CDR 还没有使用正式的 ANARCI/IMGT 编号流程。
+- 还没有完成结构折叠、Docking、能量、可开发性或实验验证。
 
-| Layer | Responsibility |
-| --- | --- |
-| Dataset layer | Validate examples, preserve provenance, collate padded batches, and detect tampering |
-| Model layer | Encode task/sequence/geometry context and predict clean frames and tokens |
-| Flow layer | Corrupt training examples and integrate conditional samples |
-| Benchmark layer | Enforce track budgets, isolate public inputs, score hidden labels, and record reproducibility metadata |
+## 下一步计划
 
-The public runtime exposes corrupted coordinates and tokens plus task/context metadata. It does not intentionally expose clean designed tokens, translations, rotations, anchor coordinates, or hidden scores to submission code.
+1. 构建 Binder、抗体和 RNA 的大规模去重数据集。
+2. 提高自由生成和三维旋转的准确度。
+3. 加入完整原子、侧链和扭转角生成。
+4. 加入正式的抗体编号和任务专用数据处理。
+5. 接入结构预测、Docking 和自洽性评估工具。
+6. 使用多个随机种子进行正式对比实验。
 
-## Current validation status
+## 项目定位
 
-The implementation has been exercised with:
+NanoDesign 当前是一个可以运行、训练、评估和生成结果的多任务分子设计研究框架。
 
-- unit and contract tests for all three task types;
-- joint forward/backward training;
-- dataset-tampering detection;
-- public-batch label filtering;
-- fixed-context preservation and polymer-valid sampling;
-- multi-GPU H100 training, checkpoint/resume, evaluation, and prediction;
-- a three-structure public smoke panel covering binder, antibody, and RNA paths.
-
-The public panel is deliberately an end-to-end smoke/overfit test. Improvements on this panel demonstrate that the software path can learn, score, resume, and sample; they do not demonstrate generalization to unseen molecular systems.
-
-## Present limitations
-
-- No large, leakage-controlled, cluster-disjoint train/validation/test corpus is included yet.
-- Outputs are residue frames plus three canonical anchors, not full protein side chains, antibody atoms, RNA atoms, or torsions.
-- Free sampling is substantially less accurate than fixed-time denoising in the current short smoke run.
-- Rotation learning remains weak in the current baseline.
-- Antibody CDR windows in the smoke preset are deterministic approximations rather than production ANARCI/IMGT numbering.
-- No external folding, docking, self-consistency, energetic, developability, RNA secondary-structure, or wet-lab validation has been established.
-- The in-process submission runtime validates the data interface but is not an adversarial security sandbox. A public competition should use restricted containers and an external hidden-data service.
-- Hardware-normalized wall-clock or FLOP accounting is not yet part of track enforcement.
-
-## Recommended next milestones
-
-1. Build auditable, cluster-disjoint datasets for all three tasks.
-2. Close the official trainer/submission API loop so arbitrary submissions use the same budgeted training path.
-3. Strengthen output-contract validation for vocabulary size, valid SO(3) matrices, and frame/anchor consistency.
-4. Add production antibody numbering and task-specific cropping and augmentation.
-5. Improve SO(3) flow and require free-sampling metrics to improve across multiple seeds.
-6. Add polymer-specific torsion/full-atom decoders and stereochemical losses.
-7. Add external structure, docking, self-consistency, and task-specific quality evaluation.
-
-## Project status
-
-NanoDesign should currently be treated as a strong engineering prototype and experimental baseline: the framework is complete enough to run reproducible multi-task design experiments, while scientific claims should wait for leakage-controlled data, stronger free sampling, full-atom outputs, and external validation.
+它已经搭建好了数据、模型、训练、评分和推理的完整基础设施。下一阶段的重点是扩大训练数据、提高自由生成质量，并加入更严格的外部科学验证。
