@@ -14,15 +14,17 @@ jobs:
       - uses: actions/checkout@v5
       - uses: actions/setup-python@v6
         with:
-          python-version: "3.11"
+          # RosettaCommons Foundry, which supplies the frozen RFD3NA baseline,
+          # requires Python >=3.12.  Pin the minor version used by training too.
+          python-version: "3.12"
           cache: pip
       - name: Install
-        run: python -m pip install -e ".[dev]"
+        run: python -m pip install -e ".[data,evaluation,model,dev]"
       - name: Ruff lint
         run: python -m ruff check --output-format=github src tests
       - name: Ruff format
         run: python -m ruff format --check src tests
       - name: Test
         run: python -m pytest
-      - name: Shared-model smoke test
-        run: nanodesign-v0 smoke --config configs/v0.yaml
+      - name: Shared-model configuration smoke test
+        run: nanodesign-v0 model-summary --config configs/v0.yaml

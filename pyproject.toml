@@ -7,7 +7,7 @@ name = "nanodesign"
 version = "0.0.1"
 description = "Strict infrastructure for the NanoDesign v0 three-task molecular design benchmark"
 readme = "README.md"
-requires-python = ">=3.11"
+requires-python = ">=3.12,<3.13"
 dependencies = [
   "numpy>=1.26",
   "PyYAML>=6.0",
@@ -45,7 +45,7 @@ addopts = "-q"
 
 [tool.ruff]
 line-length = 100
-target-version = "py311"
+target-version = "py312"
 
 [tool.ruff.lint.isort]
 known-first-party = ["nanodesign"]
