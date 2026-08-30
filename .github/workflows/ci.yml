@@ -23,6 +23,6 @@ jobs:
       - name: Ruff format
         run: python -m ruff format --check src tests
       - name: Test
-        run: pytest
+        run: python -m pytest
       - name: Shared-model smoke test
         run: nanodesign-v0 smoke --config configs/v0.yaml
