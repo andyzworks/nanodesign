@@ -1,0 +1,65 @@
+schema_version: nanodesign.v0
+
+tasks:
+  - protein_binder
+  - antibody_cdr
+  - rna_aptamer
+
+data:
+  protein_binder:
+    source: ppiref50k
+    version: null
+    split_method: null
+    redundancy_filter: null
+    chain_assignment: null
+
+  antibody_cdr:
+    source: sabdab2
+    version: null
+    cdr_design: null  # Must become h3_only or all_six before data preparation.
+    split_method: null
+    quality_filter: null
+
+  rna_aptamer:
+    binding_sources:
+      - ribocentre_aptamer
+      - pdb_rna_target_complex
+    auxiliary_sources:
+      - rnasolo2
+    versions:
+      ribocentre_aptamer: null
+      pdb_rna_target_complex: null
+      rnasolo2: null
+    usable_complex_inventory:
+      path: null
+      sha256: null
+    split_method: null
+    quality_filter: null
+
+model:
+  architecture: rfd3na_tiny
+  atom_dim: 128
+  token_dim: 384
+  num_layers: 6
+  num_heads: 8
+  ff_multiplier: 4
+  max_neighbors: 64
+  num_diffusion_steps: 200
+  coordinate_loss_weight: 1.0
+  sequence_loss_weight: 1.0
+
+evaluation:
+  protein_binder:
+    independent_structure_predictor: null
+    success_filter_profile: null
+    threshold_source: null
+
+  antibody_cdr:
+    structure_predictor: null
+    dockq_implementation: null
+    rosetta_protocol: null
+
+  rna_aptamer:
+    rna_structure_predictor: null
+    dockq_implementation: null
+
