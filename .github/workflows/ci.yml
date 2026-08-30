@@ -23,22 +23,6 @@ jobs:
       - name: Ruff format
         run: python -m ruff format --check src tests
       - name: Test
-        run: |
-          python - <<'PY'
-          import subprocess
-          import sys
-
-          result = subprocess.run(
-              [sys.executable, "-m", "pytest"],
-              stdout=subprocess.PIPE,
-              stderr=subprocess.STDOUT,
-              text=True,
-          )
-          print(result.stdout, end="")
-          if result.returncode:
-              message = result.stdout.replace("%", "%25").replace("\r", "%0D").replace("\n", "%0A")
-              print(f"::error title=pytest collection or test failure::{message[-50000:]}")
-          raise SystemExit(result.returncode)
-          PY
+        run: python -m pytest
       - name: Shared-model smoke test
         run: nanodesign-v0 smoke --config configs/v0.yaml
