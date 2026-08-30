@@ -1,0 +1,34 @@
+{
+  "foundry_commit": "aad357b776e3c0d6b973080f8f8c4bcf3ed21e40",
+  "parameter_count": 6849538,
+  "sampling_steps": 2,
+  "tasks": {
+    "protein_binder": {
+      "sample_id": "ppiref50k:1w7r_E_F",
+      "tokens": 8,
+      "atoms": 112,
+      "forward": true,
+      "backward": true,
+      "generated_coordinates": [1, 112, 3],
+      "generated_sequence_logits": [1, 8, 32]
+    },
+    "antibody_h3": {
+      "sample_id": "sabdab2:pdb_00009hkq_F_+",
+      "tokens": 11,
+      "atoms": 154,
+      "forward": true,
+      "backward": true,
+      "generated_coordinates": [1, 154, 3],
+      "generated_sequence_logits": [1, 11, 32]
+    },
+    "rna_aptamer": {
+      "sample_id": "pdb_rna_target:1hji:0",
+      "tokens": 19,
+      "atoms": 401,
+      "forward": true,
+      "backward": true,
+      "generated_coordinates": [1, 401, 3],
+      "generated_sequence_logits": [1, 19, 32]
+    }
+  }
+}

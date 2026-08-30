@@ -1,0 +1,18 @@
+{
+  "catalog_sha256": "3e5850b29bcb5501ae8d9eb2fa8e6fada2182d9e159bf035e62607001b2bfd82",
+  "exclusive_rejection_counts": {
+    "chain_not_resolved": 337,
+    "chain_shorter_than_4_residues": 315
+  },
+  "filtering": [
+    "official PPIRef X-ray/EM and resolution <= 3.5 A",
+    "official buried surface area >= 500 A^2",
+    "official iDist 0.04 structural deduplication",
+    "both official interface chains resolve to >=4 standard residues with CA coordinates",
+    "at least one inter-chain heavy-atom contact within 6 A in the official interface coordinates"
+  ],
+  "official_candidates": 51755,
+  "source": "ppiref50k",
+  "source_version": "PPIRef-6A filtered_clustered_04; Zenodo 14845086; PDB January 2024",
+  "usable_samples": 51103
+}

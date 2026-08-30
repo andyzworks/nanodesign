@@ -6,31 +6,27 @@ import argparse
 import json
 from pathlib import Path
 
-import torch
-
 from nanodesign.v0.config import (
     load_config,
     validate_resolved_assets,
     validate_v0_config,
 )
-from nanodesign.v0.contracts import collate_examples
 from nanodesign.v0.data.adapters import ADAPTERS
 from nanodesign.v0.data.inventory import (
     audit_rna_complex_inventory,
     load_rna_complex_inventory,
 )
 from nanodesign.v0.data.manifest import audit_manifest, load_manifest
-from nanodesign.v0.diffusion import DiffusionConfig, UnifiedDiffusion
 from nanodesign.v0.evaluation import PROTOCOLS
 from nanodesign.v0.model import NanoDesignTiny, NanoDesignTinyConfig
 from nanodesign.v0.spec import get_v0_spec
-from nanodesign.v0.testing import synthetic_binding_examples
 
 
 def _model_from_config(path: str | Path) -> NanoDesignTiny:
     config = load_config(path)
     validate_v0_config(config)
-    model = NanoDesignTiny(NanoDesignTinyConfig.from_mapping(config["model"]))
+    model_values = {key: config["model"][key] for key in NanoDesignTinyConfig.__dataclass_fields__}
+    model = NanoDesignTiny(NanoDesignTinyConfig.from_mapping(model_values))
     model.validate_parameter_budget()
     return model
 
@@ -88,39 +84,9 @@ def command_model_summary(args: argparse.Namespace) -> int:
     print(
         json.dumps(
             {
-                "architecture": model.config.architecture,
+                "architecture": "RosettaCommons Foundry rfd3na.model.RFD3.RFD3",
                 "parameter_count": model.parameter_count,
                 "within_v0_budget": True,
-            },
-            indent=2,
-        )
-    )
-    return 0
-
-
-def command_smoke(args: argparse.Namespace) -> int:
-    raw_config = load_config(args.config)
-    model = _model_from_config(args.config)
-    batch = collate_examples(synthetic_binding_examples())
-    model_batch = {key: value for key, value in batch.items() if isinstance(value, torch.Tensor)}
-    diffusion = UnifiedDiffusion(
-        DiffusionConfig(
-            num_steps=int(raw_config["model"]["num_diffusion_steps"]),
-            coordinate_loss_weight=float(raw_config["model"]["coordinate_loss_weight"]),
-            sequence_loss_weight=float(raw_config["model"]["sequence_loss_weight"]),
-        )
-    )
-    corrupted = diffusion.corrupt(model_batch, timestep=torch.tensor([10, 20, 30]))
-    output = model(corrupted)
-    losses = diffusion.loss(output, corrupted)
-    losses["loss"].backward()
-    print(
-        json.dumps(
-            {
-                "tasks": 3,
-                "parameter_count": model.parameter_count,
-                "loss": float(losses["loss"].detach()),
-                "backward": True,
             },
             indent=2,
         )
@@ -153,9 +119,6 @@ def build_parser() -> argparse.ArgumentParser:
     model_summary = subparsers.add_parser("model-summary")
     model_summary.add_argument("--config", default="configs/v0.yaml")
     model_summary.set_defaults(function=command_model_summary)
-    smoke = subparsers.add_parser("smoke", help="run all three tasks through one model")
-    smoke.add_argument("--config", default="configs/v0.yaml")
-    smoke.set_defaults(function=command_smoke)
     return parser
 
 

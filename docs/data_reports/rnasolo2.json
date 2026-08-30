@@ -1,0 +1,17 @@
+{
+  "binding_ground_truth": false,
+  "catalog_sha256": "bac7d95a2750e12dbf8a65f32fcd7760e61055c52cc8370781341b208a60fbb3",
+  "downloaded_representative_structures": 954,
+  "exclusive_rejection_counts": {
+    "no_resolved_rna_chain_length_at_least_8": 72
+  },
+  "filtering": [
+    "BGSU nonredundant representative set only",
+    "solo-RNA molecule class only (not protein-RNA complexes)",
+    "X-ray/EM resolution <=4 A or NMR",
+    "at least one resolved RNA chain of length >=8 with C1' coordinates"
+  ],
+  "source": "rnasolo2",
+  "source_version": "BGSU representatives; BGSU 4.54 (2026-08-27), PDB snapshot 2025-10-25, Rfam 15.1",
+  "usable_auxiliary_samples": 882
+}

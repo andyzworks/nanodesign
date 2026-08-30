@@ -1,0 +1,27 @@
+{
+  "candidate_pdb_entries": 7955,
+  "catalog_sha256": "45c6a13cf92461b6efbe4cdc73310c526dc052493c56814c7422f59d54964829",
+  "eligible_before_coordinate_contacts": 2139,
+  "exclusive_rejection_counts_by_entry": {
+    "assembly_above_2_rna_or_4_protein_chains": 3537,
+    "chain_parse_failure": 17,
+    "duplicate_of_ribocentre": 28,
+    "no_eligible_rna_and_protein_entity_pair": 1390,
+    "no_supported_5A_contact_component": 130,
+    "resolution_above_4A_or_missing": 858,
+    "unsupported_experimental_method": 3
+  },
+  "filtering": [
+    "experimental entry contains both RNA and protein polymer entities",
+    "X-ray/EM resolution <=4 A or NMR",
+    "RNA entity length 8-256 and protein entity length 20-2048",
+    "small-complex scope: at most 2 RNA and 4 protein chains",
+    "at least 3 resolved residues per partner contact within 5 A",
+    "Ribocentre PDB entries removed from the general PDB source"
+  ],
+  "metadata_entries": 7955,
+  "source": "pdb_rna_target_complex",
+  "source_version": "RCSB PDB Search/Data API snapshot 2026-08-30",
+  "usable_contact_components": 2255,
+  "usable_pdb_entries": 1992
+}

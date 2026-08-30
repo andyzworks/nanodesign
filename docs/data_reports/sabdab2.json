@@ -1,0 +1,26 @@
+{
+  "catalog_sha256": "07aa80f04baf415f85a7c0e3a0051f06c53c9ff5cf79760a578e238bbf9a8569",
+  "exclusive_rejection_counts": {
+    "cdrh3_backbone_incomplete": 4,
+    "cdrh3_not_fully_resolved": 2,
+    "missing_heavy_chain_or_cdrh3": 40,
+    "missing_or_misaligned_antigen_annotation": 3619,
+    "non_protein_or_peptide_antigen": 4937,
+    "not_holo": 1739
+  },
+  "filtering": [
+    "official SAbDab2 X-ray/EM resolution <=3.5 A curation",
+    "holo complex with a heavy chain and non-empty CDR-H3",
+    "all annotated antigens are protein or peptide",
+    "IMGT CDR-H3 positions 105-117 match metadata and have complete N/CA/C/O",
+    "official antigen-aware ab_ag_cluster and 80/20 train/test split are present"
+  ],
+  "official_structures": 15641,
+  "source": "sabdab2",
+  "source_version": "SAbDab2 ML dataset 0.1.0; Zenodo 20083995 (2026-05-08)",
+  "usable_native_split_counts": {
+    "test": 984,
+    "train": 4316
+  },
+  "usable_samples": 5300
+}

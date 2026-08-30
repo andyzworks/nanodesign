@@ -12,7 +12,6 @@ from pathlib import Path
 import torch
 
 from nanodesign.v0.config import validate_v0_config
-from nanodesign.v0.diffusion import UnifiedDiffusion
 from nanodesign.v0.model import NanoDesignTiny
 from nanodesign.v0.spec import SPEC_VERSION
 
@@ -30,23 +29,80 @@ class TrainingConfig:
 
 def train_step(
     model: NanoDesignTiny,
-    diffusion: UnifiedDiffusion,
     optimizer: torch.optim.Optimizer,
-    clean_batch: Mapping[str, torch.Tensor],
+    batch: Mapping[str, object],
     config: TrainingConfig | None = None,
 ) -> dict[str, float]:
+    """Run one step with the public RFD3NA diffusion and sequence losses."""
+
     config = config or TrainingConfig()
+    try:
+        from rfd3na.metrics.losses import DiffusionLoss, SequenceLoss
+    except ImportError as error:
+        raise ImportError("training requires the project 'model' extra") from error
     model.train()
-    batch = diffusion.corrupt(clean_batch)
     optimizer.zero_grad(set_to_none=True)
     output = model(batch)
-    losses = diffusion.loss(output, batch)
-    losses["loss"].backward()
+    features = batch["f"]
+    if not isinstance(features, Mapping):
+        raise TypeError("batch.f must be an RFD3NA feature mapping")
+    gt_positions = batch["ground_truth_positions"]
+    gt_atom_mask = batch["ground_truth_atom_mask"]
+    gt_sequence = batch["ground_truth_sequence"]
+    gt_sequence_mask = batch["ground_truth_sequence_mask"]
+    if not all(
+        isinstance(value, torch.Tensor)
+        for value in (gt_positions, gt_atom_mask, gt_sequence, gt_sequence_mask)
+    ):
+        raise TypeError("batch is missing tensor ground truth")
+    loss_input = {
+        "X_gt_L_in_input_frame": gt_positions,
+        "crd_mask_L": gt_atom_mask,
+        "is_original_unindexed_token": torch.zeros(
+            gt_sequence.shape[0], dtype=torch.bool, device=gt_sequence.device
+        ),
+        "seq_token_lvl": gt_sequence.argmax(dim=-1),
+        "sequence_valid_mask": gt_sequence_mask.float(),
+    }
+    coordinate_loss_module = DiffusionLoss(
+        weight=4.0,
+        sigma_data=16.0,
+        lddt_weight=0.25,
+        alpha_virtual_atom=1.0,
+        alpha_polar_residues=1.0,
+        alpha_ligand=10.0,
+        lp_weight=0.0,
+    )
+    sequence_loss_module = SequenceLoss(weight=0.1, max_t=1.0)
+    coordinate_loss, coordinate_metrics = coordinate_loss_module(batch, output, loss_input)
+    sequence_loss, sequence_metrics = sequence_loss_module(batch, output, loss_input)
+    loss = coordinate_loss + sequence_loss
+    loss.backward()
     gradient_norm = torch.nn.utils.clip_grad_norm_(model.parameters(), config.gradient_clip)
     optimizer.step()
+    metrics = {
+        "loss": loss,
+        "coordinate_loss": coordinate_loss,
+        "sequence_loss": sequence_loss,
+        **coordinate_metrics,
+        **sequence_metrics,
+    }
     return {
-        key: float(value.detach().item()) for key, value in losses.items() if value.ndim == 0
+        key: float(value.detach().item())
+        for key, value in metrics.items()
+        if isinstance(value, torch.Tensor) and value.numel() == 1
     } | {"gradient_norm": float(gradient_norm)}
+
+
+@torch.no_grad()
+def generate(model: NanoDesignTiny, batch: Mapping[str, object]) -> dict[str, torch.Tensor]:
+    """Generate sequence and atom23 coordinates with RFD3NA's official EDM sampler."""
+
+    coordinates = batch.get("coord_atom_lvl_to_be_noised")
+    if not isinstance(coordinates, torch.Tensor):
+        raise TypeError("batch is missing coord_atom_lvl_to_be_noised")
+    model.eval()
+    return model(batch, coord_atom_lvl_to_be_noised=coordinates)
 
 
 def build_optimizer(

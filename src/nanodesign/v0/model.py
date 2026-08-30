@@ -1,204 +1,206 @@
-"""NanoDesign-Tiny: an independent small RFD3NA-style atom/token model.
+"""NanoDesign-Tiny built directly from the public Foundry RFD3NA implementation.
 
-The implementation follows the public high-level RFD3 pattern without copying its
-code: atom encoding/downsampling -> sparse token transformer -> atom upsampling.
+No geometry or attention block is reimplemented here. This module instantiates the
+published RFD3NA classes at Foundry commit aad357b776e3 and reduces only channel counts,
+block counts, neighbourhood size, recycling, and EDM sampling steps.
 """
 
 from __future__ import annotations
 
-import math
 from collections.abc import Mapping
 from dataclasses import dataclass
+from typing import Any
 
 import torch
 from torch import nn
 
-from nanodesign.v0.constants import VOCAB_SIZE, Polymer, Role, Task
-from nanodesign.v0.spec import (
-    MAX_MODEL_PARAMETERS,
-    MIN_MODEL_PARAMETERS,
-    MODEL_ARCHITECTURE,
-)
+from nanodesign.v0.spec import MAX_MODEL_PARAMETERS, MIN_MODEL_PARAMETERS
+
+FOUNDRY_COMMIT = "aad357b776e3c0d6b973080f8f8c4bcf3ed21e40"
+ATOM_ASSOCIATION_SCHEME = "atom23"
 
 
 @dataclass(frozen=True)
 class NanoDesignTinyConfig:
-    architecture: str = MODEL_ARCHITECTURE
-    atom_dim: int = 128
-    token_dim: int = 384
-    num_layers: int = 6
-    num_heads: int = 8
-    ff_multiplier: int = 4
-    max_neighbors: int = 64
-    max_elements: int = 32
-    max_chain_id: int = 128
-    dropout: float = 0.0
+    c_s: int = 128
+    c_z: int = 64
+    c_atom: int = 64
+    c_atompair: int = 16
+    c_token: int = 240
+    c_time: int = 128
+    initializer_pairformer_blocks: int = 1
+    diffusion_pairformer_blocks: int = 1
+    diffusion_transformer_blocks: int = 6
+    atom_encoder_blocks: int = 2
+    atom_decoder_blocks: int = 2
+    atom_attention_keys: int = 64
+    recycle_steps: int = 1
+    sampling_steps: int = 50
 
     def __post_init__(self) -> None:
-        if self.architecture != MODEL_ARCHITECTURE:
-            raise ValueError(f"architecture must be {MODEL_ARCHITECTURE}")
-        if self.token_dim % self.num_heads:
-            raise ValueError("token_dim must be divisible by num_heads")
-        dimensions = (
-            self.atom_dim,
-            self.token_dim,
-            self.num_layers,
-            self.num_heads,
-            self.ff_multiplier,
-            self.max_neighbors,
-            self.max_elements,
-            self.max_chain_id,
-        )
-        if min(dimensions) < 1:
-            raise ValueError("model dimensions and counts must be positive")
-        if not 0 <= self.dropout < 1:
-            raise ValueError("dropout must lie in [0, 1)")
+        if min(self.__dict__.values()) < 1:
+            raise ValueError("all NanoDesign-Tiny dimensions and block counts must be positive")
+        if self.c_s % 4 or self.c_z % 4 or self.c_atom % 4 or self.c_token % 24:
+            raise ValueError("channels must be divisible by unchanged RFD3NA head counts")
 
     @classmethod
     def from_mapping(cls, value: Mapping[str, object]) -> NanoDesignTinyConfig:
-        names = set(cls.__dataclass_fields__)
-        model_only = {key: item for key, item in value.items() if key in names}
-        unknown = (
-            set(value)
-            - names
-            - {
-                "num_diffusion_steps",
-                "coordinate_loss_weight",
-                "sequence_loss_weight",
-                "atom_slot_schema",
-                "capacity_benchmark",
-            }
-        )
+        known = set(cls.__dataclass_fields__)
+        unknown = set(value) - known
         if unknown:
-            raise ValueError(f"unknown model config keys: {sorted(unknown)}")
-        return cls(**model_only)  # type: ignore[arg-type]
+            raise ValueError(f"unknown official RFD3NA tiny config keys: {sorted(unknown)}")
+        return cls(**value)  # type: ignore[arg-type]
 
 
-def sinusoidal_time_embedding(time: torch.Tensor, dimension: int) -> torch.Tensor:
-    half = dimension // 2
-    frequency = torch.exp(
-        -math.log(10_000.0)
-        * torch.arange(half, device=time.device, dtype=time.dtype)
-        / max(half - 1, 1)
-    )
-    angles = time[:, None] * frequency[None, :]
-    embedding = torch.cat((torch.sin(angles), torch.cos(angles)), dim=-1)
-    if embedding.shape[-1] < dimension:
-        embedding = torch.nn.functional.pad(embedding, (0, dimension - embedding.shape[-1]))
-    return embedding
+def _cross_attention(config: NanoDesignTinyConfig) -> dict[str, Any]:
+    return {
+        "method": "cross_attention",
+        "cross_attention_block": {
+            "n_head": 4,
+            "c_model": config.c_atom,
+            "dropout": 0.0,
+            "kq_norm": True,
+        },
+    }
 
 
-def _scatter_atom_mean(
-    atom_features: torch.Tensor,
-    atom_token_index: torch.Tensor,
-    atom_mask: torch.Tensor,
-    num_tokens: int,
-) -> torch.Tensor:
-    batch_size, _, dimension = atom_features.shape
-    output = atom_features.new_zeros((batch_size, num_tokens, dimension))
-    count = atom_features.new_zeros((batch_size, num_tokens, 1))
-    index = atom_token_index.clamp(0, num_tokens - 1)
-    output.scatter_add_(
-        1,
-        index[..., None].expand(-1, -1, dimension),
-        atom_features * atom_mask[..., None],
-    )
-    count.scatter_add_(1, index[..., None], atom_mask[..., None])
-    return output / count.clamp_min(1.0)
+def _pairformer_block() -> dict[str, Any]:
+    return {
+        "use_triangle_attn": False,
+        "use_triangle_mult": False,
+        "attention_pair_bias": {"n_head": 4, "kq_norm": True},
+    }
 
 
-def _token_centers(
-    atom_positions: torch.Tensor,
-    atom_token_index: torch.Tensor,
-    atom_mask: torch.Tensor,
-    num_tokens: int,
-) -> torch.Tensor:
-    return _scatter_atom_mean(atom_positions, atom_token_index, atom_mask, num_tokens)
-
-
-def _reference_center(
-    centers: torch.Tensor,
-    token_mask: torch.Tensor,
-    design_mask: torch.Tensor,
-) -> torch.Tensor:
-    context_mask = token_mask * (1.0 - design_mask)
-    fallback = token_mask
-    has_context = context_mask.sum(dim=1, keepdim=True) > 0
-    weights = torch.where(has_context, context_mask, fallback)
-    return (centers * weights[..., None]).sum(dim=1) / weights.sum(dim=1, keepdim=True).clamp_min(
-        1.0
-    )
-
-
-class SparseTokenBlock(nn.Module):
-    def __init__(self, config: NanoDesignTinyConfig):
-        super().__init__()
-        self.num_heads = config.num_heads
-        self.max_neighbors = config.max_neighbors
-        self.attention_norm = nn.LayerNorm(config.token_dim)
-        self.attention = nn.MultiheadAttention(
-            config.token_dim,
-            config.num_heads,
-            dropout=config.dropout,
-            batch_first=True,
-        )
-        self.feedforward_norm = nn.LayerNorm(config.token_dim)
-        self.feedforward = nn.Sequential(
-            nn.Linear(config.token_dim, config.token_dim * config.ff_multiplier),
-            nn.GELU(),
-            nn.Dropout(config.dropout),
-            nn.Linear(config.token_dim * config.ff_multiplier, config.token_dim),
-        )
-        self.dropout = nn.Dropout(config.dropout)
-
-    def _attention_mask(self, centers: torch.Tensor, token_mask: torch.Tensor) -> torch.Tensor:
-        batch_size, num_tokens, _ = centers.shape
-        valid = token_mask.bool()
-        distance = torch.cdist(centers.float(), centers.float())
-        distance = distance.masked_fill(~valid[:, None, :], torch.inf)
-        neighbors = min(self.max_neighbors, num_tokens)
-        neighbor_index = distance.topk(neighbors, dim=-1, largest=False).indices
-        allowed = torch.zeros(
-            (batch_size, num_tokens, num_tokens),
-            dtype=torch.bool,
-            device=centers.device,
-        )
-        allowed.scatter_(2, neighbor_index, True)
-        allowed &= valid[:, None, :]
-        identity = torch.eye(num_tokens, dtype=torch.bool, device=centers.device)[None]
-        allowed |= identity & valid[:, :, None]
-        # Padded queries are discarded after attention but need a valid key to avoid NaN.
-        allowed = torch.where(valid[:, :, None], allowed, valid[:, None, :])
-        return (
-            (~allowed)[:, None]
-            .expand(batch_size, self.num_heads, num_tokens, num_tokens)
-            .reshape(batch_size * self.num_heads, num_tokens, num_tokens)
-        )
-
-    def forward(
-        self,
-        token_features: torch.Tensor,
-        centers: torch.Tensor,
-        token_mask: torch.Tensor,
-    ) -> torch.Tensor:
-        normalized = self.attention_norm(token_features)
-        attention, _ = self.attention(
-            normalized,
-            normalized,
-            normalized,
-            attn_mask=self._attention_mask(centers, token_mask),
-            key_padding_mask=~token_mask.bool(),
-            need_weights=False,
-        )
-        token_features = token_features + self.dropout(attention)
-        token_features = token_features + self.dropout(
-            self.feedforward(self.feedforward_norm(token_features))
-        )
-        return token_features * token_mask[..., None]
+def _official_arguments(config: NanoDesignTinyConfig) -> dict[str, Any]:
+    downcast = _cross_attention(config)
+    atom_block = {
+        "n_head": 4,
+        "kq_norm": True,
+        "no_residual_connection_between_attention_and_transition": False,
+        "dropout": 0.0,
+    }
+    token_initializer = {
+        "relative_position_encoding": {"r_max": 32, "s_max": 2},
+        "n_pairformer_blocks": config.initializer_pairformer_blocks,
+        "pairformer_block": _pairformer_block(),
+        "token_1d_features": {
+            "ref_motif_token_type": 3,
+            "restype": 32,
+            "ref_plddt": 1,
+            "is_non_loopy": 1,
+            "is_dna_token": 1,
+            "is_rna_token": 1,
+            "is_protein_token": 1,
+        },
+        "token_2d_features": {"bp_partners": 3},
+        "downcast": downcast,
+        "atom_1d_features": {
+            "ref_atom_name_chars": 256,
+            "ref_element": 128,
+            "ref_charge": 1,
+            "ref_mask": 1,
+            "ref_is_motif_atom_with_fixed_coord": 1,
+            "ref_is_motif_atom_unindexed": 1,
+            "has_zero_occupancy": 1,
+            "ref_pos": 3,
+            "ref_atomwise_rasa": 3,
+            "active_donor": 1,
+            "active_acceptor": 1,
+            "is_atom_level_hotspot": 1,
+        },
+        "atom_transformer": {
+            "n_blocks": 0,
+            "atom_transformer_block": atom_block
+            | {
+                "n_attn_seq_neighbours": 4,
+                "n_attn_keys": config.atom_attention_keys,
+            },
+        },
+    }
+    diffusion_module = {
+        "_target_": "rfd3na.model.RFD3_diffusion_module.RFD3DiffusionModule",
+        "c_token": config.c_token,
+        "c_t_embed": config.c_time,
+        "sigma_data": 16,
+        "f_pred": "edm",
+        "n_attn_seq_neighbours": 2,
+        "n_attn_keys": config.atom_attention_keys,
+        "n_recycle": config.recycle_steps,
+        "use_local_token_attention": True,
+        "downcast": downcast,
+        "atom_attention_encoder": {
+            "n_blocks": config.atom_encoder_blocks,
+            "atom_transformer_block": atom_block,
+        },
+        "diffusion_token_encoder": {
+            "use_distogram": True,
+            "use_self": True,
+            "use_sinusoidal_distogram_embedder": False,
+            "sigma_data": 16,
+            "n_pairformer_blocks": config.diffusion_pairformer_blocks,
+            "pairformer_block": _pairformer_block(),
+        },
+        "diffusion_transformer": {
+            "n_block": config.diffusion_transformer_blocks,
+            "n_registers": 0,
+            "n_local_tokens": 32,
+            "n_keys": config.atom_attention_keys,
+            "diffusion_transformer_block": {
+                "n_head": 8,
+                "kq_norm": True,
+                "no_residual_connection_between_attention_and_transition": False,
+                "dropout": 0.0,
+            },
+        },
+        "atom_attention_decoder": {
+            "n_blocks": config.atom_decoder_blocks,
+            "upcast": {
+                "method": "cross_attention",
+                "n_split": 3,
+                "cross_attention_block": {
+                    "n_head": 4,
+                    "c_model": config.c_atom,
+                    "dropout": 0.0,
+                    "kq_norm": True,
+                },
+            },
+            "downcast": downcast,
+            "atom_transformer_block": atom_block,
+        },
+    }
+    inference_sampler = {
+        "kind": "default",
+        "solver": "af3",
+        "num_timesteps": config.sampling_steps,
+        "min_t": 0,
+        "max_t": 1,
+        "sigma_data": 16,
+        "s_min": 4e-4,
+        "s_max": 160,
+        "p": 7,
+        "gamma_0": 0.8,
+        "gamma_min": 1.0,
+        "noise_scale": 1.003,
+        "step_scale": 1.5,
+        "allow_realignment": False,
+        "use_classifier_free_guidance": False,
+        "cfg_scale": 1.0,
+        "cfg_features": [],
+    }
+    return {
+        "c_s": config.c_s,
+        "c_z": config.c_z,
+        "c_atom": config.c_atom,
+        "c_atompair": config.c_atompair,
+        "token_initializer": token_initializer,
+        "diffusion_module": diffusion_module,
+        "inference_sampler": inference_sampler,
+    }
 
 
 class NanoDesignTiny(nn.Module):
-    """One model pipeline for protein binder, antibody CDR, and RNA aptamer."""
+    """Thin, provenance-pinned wrapper around the public RFD3NA model."""
 
     def __init__(self, config: NanoDesignTinyConfig | Mapping[str, object] | None = None):
         super().__init__()
@@ -207,41 +209,14 @@ class NanoDesignTiny(nn.Module):
         elif isinstance(config, Mapping):
             config = NanoDesignTinyConfig.from_mapping(config)
         self.config = config
-        d = config.token_dim
-        self.token_embedding = nn.Embedding(VOCAB_SIZE, d, padding_idx=0)
-        self.polymer_embedding = nn.Embedding(len(Polymer), d, padding_idx=0)
-        self.role_embedding = nn.Embedding(len(Role), d, padding_idx=0)
-        self.task_embedding = nn.Embedding(len(Task), d)
-        self.chain_embedding = nn.Embedding(config.max_chain_id + 1, d, padding_idx=0)
-        self.position_projection = nn.Sequential(nn.Linear(1, d), nn.SiLU(), nn.Linear(d, d))
-        self.time_projection = nn.Sequential(nn.Linear(d, d), nn.SiLU(), nn.Linear(d, d))
-        self.design_projection = nn.Linear(1, d)
-        self.center_projection = nn.Sequential(nn.Linear(3, d), nn.SiLU(), nn.Linear(d, d))
-
-        self.element_embedding = nn.Embedding(config.max_elements, config.atom_dim)
-        self.coordinate_projection = nn.Linear(3, config.atom_dim, bias=False)
-        self.atom_encoder = nn.Sequential(
-            nn.Linear(config.atom_dim * 2, d),
-            nn.SiLU(),
-            nn.Linear(d, d),
-            nn.LayerNorm(d),
-        )
-        self.input_norm = nn.LayerNorm(d)
-        self.blocks = nn.ModuleList(SparseTokenBlock(config) for _ in range(config.num_layers))
-        self.final_norm = nn.LayerNorm(d)
-        self.atom_decoder = nn.Sequential(
-            nn.Linear(d * 2, d),
-            nn.SiLU(),
-            nn.Linear(d, d),
-            nn.SiLU(),
-            nn.Linear(d, 3),
-        )
-        self.sequence_head = nn.Sequential(
-            nn.Linear(d, d),
-            nn.GELU(),
-            nn.LayerNorm(d),
-            nn.Linear(d, VOCAB_SIZE),
-        )
+        try:
+            from rfd3na.model.RFD3 import RFD3
+        except ImportError as error:
+            raise ImportError(
+                "NanoDesign-Tiny requires Python >=3.12 and the project 'model' extra "
+                f"pinned to Foundry commit {FOUNDRY_COMMIT}"
+            ) from error
+        self.net = RFD3(**_official_arguments(config))
 
     @property
     def parameter_count(self) -> int:
@@ -254,78 +229,19 @@ class NanoDesignTiny(nn.Module):
                 f"{MIN_MODEL_PARAMETERS:,}-{MAX_MODEL_PARAMETERS:,}"
             )
 
-    def forward(self, batch: Mapping[str, torch.Tensor]) -> dict[str, torch.Tensor]:
-        required = {
-            "task_id",
-            "token_ids_t",
-            "polymer_type",
-            "role_id",
-            "chain_id",
-            "residue_index",
-            "design_mask",
-            "token_mask",
-            "atom_positions_t",
-            "atom_mask",
-            "atom_token_index",
-            "atom_element_t",
-            "diffusion_time",
-        }
-        missing = required - set(batch)
-        if missing:
-            raise KeyError(f"NanoDesign-Tiny batch is missing {sorted(missing)}")
-        token_mask = batch["token_mask"].float()
-        atom_mask = batch["atom_mask"].float()
-        atom_to_token = batch["atom_token_index"].long()
-        positions = batch["atom_positions_t"].float()
-        _, num_tokens = token_mask.shape
-        centers = _token_centers(positions, atom_to_token, atom_mask, num_tokens)
-        reference = _reference_center(centers, token_mask, batch["design_mask"].float())
-        relative_centers = (centers - reference[:, None, :]) * token_mask[..., None]
-        gathered_centers = centers.gather(1, atom_to_token[..., None].expand(-1, -1, 3))
-        relative_positions = (positions - gathered_centers) * atom_mask[..., None]
-        atom_features = (
-            self.atom_encoder(
-                torch.cat(
-                    (
-                        self.element_embedding(
-                            batch["atom_element_t"].long().clamp(0, self.config.max_elements - 1)
-                        ),
-                        self.coordinate_projection(relative_positions),
-                    ),
-                    dim=-1,
-                )
-            )
-            * atom_mask[..., None]
+    def forward(
+        self,
+        batch: Mapping[str, Any],
+        coord_atom_lvl_to_be_noised: torch.Tensor | None = None,
+        *,
+        n_cycle: int | None = None,
+    ) -> dict[str, torch.Tensor]:
+        """Run the official denoise step (train) or EDM rollout (evaluation)."""
+
+        if self.training and n_cycle is None:
+            n_cycle = self.config.recycle_steps
+        return self.net(
+            input=dict(batch),
+            coord_atom_lvl_to_be_noised=coord_atom_lvl_to_be_noised,
+            n_cycle=n_cycle,
         )
-        pooled_atoms = _scatter_atom_mean(atom_features, atom_to_token, atom_mask, num_tokens)
-        normalized_position = batch["residue_index"].float()[..., None] / 1024.0
-        time = sinusoidal_time_embedding(batch["diffusion_time"].float(), self.config.token_dim)
-        token_features = (
-            self.token_embedding(batch["token_ids_t"].long())
-            + self.polymer_embedding(batch["polymer_type"].long())
-            + self.role_embedding(batch["role_id"].long())
-            + self.task_embedding(batch["task_id"].long())[:, None, :]
-            + self.chain_embedding(batch["chain_id"].long().clamp(0, self.config.max_chain_id))
-            + self.position_projection(normalized_position)
-            + self.time_projection(time)[:, None, :]
-            + self.design_projection(batch["design_mask"].float()[..., None])
-            + self.center_projection(relative_centers)
-            + pooled_atoms
-        )
-        token_features = self.input_norm(token_features) * token_mask[..., None]
-        for block in self.blocks:
-            token_features = block(token_features, centers, token_mask)
-        token_features = self.final_norm(token_features) * token_mask[..., None]
-        gathered_tokens = token_features.gather(
-            1,
-            atom_to_token[..., None].expand(-1, -1, token_features.shape[-1]),
-        )
-        coordinate_noise = (
-            self.atom_decoder(torch.cat((atom_features, gathered_tokens), dim=-1))
-            * atom_mask[..., None]
-        )
-        return {
-            "pred_coordinate_noise": coordinate_noise,
-            "token_logits": self.sequence_head(token_features),
-            "design_mask": batch["design_mask"].float(),
-        }

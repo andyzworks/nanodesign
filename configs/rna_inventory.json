@@ -1,0 +1,31 @@
+{
+  "schema_version": "nanodesign.v0",
+  "records": [
+    {
+      "source": "ribocentre_aptamer",
+      "source_version": "Ribocentre structures_merged.json commit 94ef203d7934 (2026-08-30 snapshot)",
+      "candidate_complexes": 34,
+      "usable_complexes": 24,
+      "exclusive_rejection_counts": {
+        "no_supported_rna_protein_contact_component": 10
+      },
+      "selection_protocol": "protein-target groups; RNA 8-256; protein >=5; >=3 contacting residues per partner within 5 A"
+    },
+    {
+      "source": "pdb_rna_target_complex",
+      "source_version": "RCSB PDB Search/Data API snapshot 2026-08-30",
+      "candidate_complexes": 7955,
+      "usable_complexes": 1992,
+      "exclusive_rejection_counts": {
+        "assembly_above_2_rna_or_4_protein_chains": 3537,
+        "chain_parse_failure": 17,
+        "duplicate_of_ribocentre": 28,
+        "no_eligible_rna_and_protein_entity_pair": 1390,
+        "no_supported_5A_contact_component": 130,
+        "resolution_above_4A_or_missing": 858,
+        "unsupported_experimental_method": 3
+      },
+      "selection_protocol": "experimental RNA-protein; X-ray/EM <=4 A or NMR; RNA 8-256; protein 20-2048; >=3 contacting residues per partner within 5 A"
+    }
+  ]
+}

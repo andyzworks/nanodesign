@@ -38,8 +38,9 @@ Protein A → Target / Context
 Protein B → Binder / Design Region
 ```
 
-正式处理前必须确定：PPIRef 或 PPIRef50K、具体版本、train/validation/test split、
-redundancy filtering，以及 target/binder chain 定义。
+冻结为 PPIRef50K `ppiref_6A_filtered_clustered_04`。MMseqs2 30% identity/80%
+coverage 的 target+binder connected components 做 80/10/10 split；较长 resolved chain
+为 target，另一条为 binder。
 
 ### Antibody CDR
 
@@ -51,8 +52,8 @@ Framework → Fixed
 CDR       → Design Region
 ```
 
-正式处理前必须确定：H3-only 或 all-six、官方 split 或重新 cluster split，以及 structure
-quality filtering。
+冻结为 H3-only。保留 SAbDab2 官方 antigen-aware test，从官方 train 的 `ab_ag` clusters
+中固定 10% 为 validation。
 
 ### RNA Aptamer
 
@@ -85,21 +86,21 @@ Unified diffusion model
 Generated sequence + structure
 ```
 
-v0 独立实现公开 RFD3 思路的最小组件，不完整复现 RFD3NA，也不保留 DNA、small molecule
-等任务外能力。
+v0 直接使用 RosettaCommons Foundry 的公开 RFD3NA 实现，固定 commit
+`aad357b776e3c0d6b973080f8f8c4bcf3ed21e40`；不自行重写 geometry block。
 
-最小组件：
+保留的官方组件：
 
 1. atom-level feature encoder；
-2. atom-to-token downsampling；
-3. sparse token transformer；
-4. token-to-atom upsampling；
+2. atom-to-token cross attention；
+3. token initializer、Pairformer 和 local diffusion transformer；
+4. token-to-atom decoder；
 5. coordinate diffusion head；
 6. protein/RNA sequence head；
 7. context/design mask conditioning。
 
-第一版命名为 `NanoDesign-Tiny`，参数量必须位于 5M–20M。最终宽度和层数必须根据目标
-GPU 上的训练速度与 peak-memory benchmark 冻结。
+第一版命名为 `NanoDesign-Tiny`，默认 6,849,538 参数。设计区使用官方 atom23 的
+`UNK/X` sequence-independent slots，不能从 native side-chain/base atom names 泄漏序列。
 
 ## 4. Evaluation
 
@@ -136,7 +137,7 @@ RNA structure quality：scTM ↑、scRMSD ↓、Structure confidence ↑。
 | Component | Decision |
 | --- | --- |
 | Task 1 | Protein Binder Design |
-| Data 1 | PPIRef / PPIRef50K |
+| Data 1 | PPIRef50K filtered_clustered_04 |
 | Evaluation 1 | In-silico Success Rate + interface/self-consistency metrics |
 | Task 2 | Antibody CDR Design |
 | Data 2 | SAbDab2 |
@@ -144,20 +145,10 @@ RNA structure quality：scTM ↑、scRMSD ↓、Structure confidence ↑。
 | Task 3 | RNA Aptamer Design conditioned on target protein |
 | Data 3 | Ribocentre + PDB RNA-target complexes + RNAsolo2 auxiliary prior |
 | Evaluation 3 | scTM + scRMSD + RNA-target DockQ |
-| Baseline | NanoDesign-Tiny: small RFD3NA-style unified diffusion model |
+| Baseline | NanoDesign-Tiny: official Foundry RFD3NA, 6,849,538 parameters |
 
-## 6. Deliberately Unresolved Decisions
+## 6. Runtime requirements
 
-以下内容不能由实现者擅自决定：
-
-- PPIRef/PPIRef50K 选择、版本、split、redundancy threshold、target/binder 规则
-- SAbDab2 版本、H3-only/all-six、split、quality filter
-- RNA 三个数据源版本、usable-complex inventory、split、quality filter
-- NanoDesign-Tiny 在目标 GPU 上的 capacity benchmark
-- design region 使用的 sequence-independent atom-slot schema
-- Binder predictor、success filter 与 threshold 来源
-- Antibody predictor、DockQ 与 Rosetta protocol
-- RNA predictor 与 DockQ implementation
-
-`configs/v0.yaml` 使用 `null` 保存这些未决项。正式数据准备、训练与评估不能绕过这些
-blockers。
+数据、模型和 evaluator 的决定已写入 `configs/v0.yaml`。完整 benchmark 仍需要在执行机器
+部署 ColabFold/RhoFold+ 权重与 licensed Rosetta，并记录 H100 peak memory 和 step time；
+这些运行结果不能在没有实际执行时伪造。

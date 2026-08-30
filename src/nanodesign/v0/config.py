@@ -10,9 +10,13 @@ from typing import Any
 import yaml
 
 from nanodesign.v0.constants import DataSource, Task
-from nanodesign.v0.diffusion import DiffusionConfig
-from nanodesign.v0.model import NanoDesignTiny, NanoDesignTinyConfig
-from nanodesign.v0.spec import MODEL_ARCHITECTURE, SPEC_VERSION
+from nanodesign.v0.model import FOUNDRY_COMMIT, NanoDesignTinyConfig
+from nanodesign.v0.spec import (
+    MAX_MODEL_PARAMETERS,
+    MIN_MODEL_PARAMETERS,
+    MODEL_ARCHITECTURE,
+    SPEC_VERSION,
+)
 
 
 class ConfigError(ValueError):
@@ -173,31 +177,41 @@ def validate_v0_config(config: Mapping[str, Any]) -> ConfigReport:
     model = _mapping(config["model"], "model")
     required_model_keys = {
         "architecture",
-        "atom_dim",
-        "token_dim",
-        "num_layers",
-        "num_heads",
-        "ff_multiplier",
-        "max_neighbors",
-        "num_diffusion_steps",
-        "coordinate_loss_weight",
-        "sequence_loss_weight",
+        "foundry_commit",
+        "c_s",
+        "c_z",
+        "c_atom",
+        "c_atompair",
+        "c_token",
+        "c_time",
+        "initializer_pairformer_blocks",
+        "diffusion_pairformer_blocks",
+        "diffusion_transformer_blocks",
+        "atom_encoder_blocks",
+        "atom_decoder_blocks",
+        "atom_attention_keys",
+        "recycle_steps",
+        "sampling_steps",
         "atom_slot_schema",
-        "capacity_benchmark",
+        "max_context_tokens",
+        "parameter_count",
     }
     _exact_keys(model, required_model_keys, "model")
     if model["architecture"] != MODEL_ARCHITECTURE:
         raise ConfigError(f"model.architecture must be {MODEL_ARCHITECTURE}")
-    _need(model["atom_slot_schema"], "model.atom_slot_schema", blockers)
-    _need(model["capacity_benchmark"], "model.capacity_benchmark", blockers)
+    if model["foundry_commit"] != FOUNDRY_COMMIT:
+        raise ConfigError(f"model.foundry_commit must be {FOUNDRY_COMMIT}")
+    if model["atom_slot_schema"] != "atom23_unk_x_sequence_independent":
+        raise ConfigError("model.atom_slot_schema must hide design side-chain/base identity")
     try:
-        model_config = NanoDesignTinyConfig.from_mapping(model)
-        NanoDesignTiny(model_config).validate_parameter_budget()
-        DiffusionConfig(
-            num_steps=int(model["num_diffusion_steps"]),
-            coordinate_loss_weight=float(model["coordinate_loss_weight"]),
-            sequence_loss_weight=float(model["sequence_loss_weight"]),
+        model_config = NanoDesignTinyConfig.from_mapping(
+            {key: model[key] for key in NanoDesignTinyConfig.__dataclass_fields__}
         )
+        if not MIN_MODEL_PARAMETERS <= int(model["parameter_count"]) <= MAX_MODEL_PARAMETERS:
+            raise ValueError("parameter_count is outside the v0 budget")
+        if int(model["max_context_tokens"]) < 1:
+            raise ValueError("max_context_tokens must be positive")
+        del model_config
     except (TypeError, ValueError) as error:
         raise ConfigError(f"invalid NanoDesign-Tiny model configuration: {error}") from error
 

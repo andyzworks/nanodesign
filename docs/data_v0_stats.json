@@ -1,0 +1,82 @@
+{
+  "cluster_disjoint": true,
+  "manifest_files": {
+    "antibody_h3/test": {
+      "count": 984,
+      "sha256": "2af9bf76c4d89b09d496fab5243f308532095e0842548584baf1df7c90aa659c"
+    },
+    "antibody_h3/train": {
+      "count": 3878,
+      "sha256": "7fff546a39705ebc4c88be42d21d8b6dad3b7f25f2a85e6a638fb37aa4b255a2"
+    },
+    "antibody_h3/validation": {
+      "count": 438,
+      "sha256": "b4cb4f073018e3db8a8ce1bb0ab08e20ad46f8a08d40866080f740b303ccb199"
+    },
+    "protein_binder/test": {
+      "count": 5110,
+      "sha256": "5bb898f15f8df8a9115a7403bd0bbf56a8189b3e7f07d622c99f02488796e1d7"
+    },
+    "protein_binder/train": {
+      "count": 40883,
+      "sha256": "47ce8cfd7270c823d7196239924f1542db46419890f7a53f9beb90a7ad48e988"
+    },
+    "protein_binder/validation": {
+      "count": 5110,
+      "sha256": "68bf89ff0feab2aaa2f6712aecc49f6b4ba04aa1f00c5b3fb2ef4c1e07c9bf01"
+    },
+    "rna_aptamer_binding/test": {
+      "count": 88,
+      "sha256": "23d436e53fb2ceb8ac90fd788149ef2251a81f4cd441e29800b36547fc6054e1"
+    },
+    "rna_aptamer_binding/train": {
+      "count": 2117,
+      "sha256": "65a3a901f8e57b1e653ab64de85e84c7c12674ebd5299540a07d0a8508876ac2"
+    },
+    "rna_aptamer_binding/validation": {
+      "count": 83,
+      "sha256": "ab6e79458992ad081f46e014ce921aef08c0054ce4a5c9cfd1c9b0f54b186774"
+    },
+    "rna_structure_prior_auxiliary/test": {
+      "count": 229,
+      "sha256": "0073095fbb820d8c212f98d233f146e185cb27959055e8acc1ab0517443cfab3"
+    },
+    "rna_structure_prior_auxiliary/train": {
+      "count": 419,
+      "sha256": "3960fed85dcb9359813b1cf4f06fded29675a4e2c27eb06ef672dab8cfda738b"
+    },
+    "rna_structure_prior_auxiliary/validation": {
+      "count": 234,
+      "sha256": "3f81d4d32903935da34acc9dad2626e0a17653602f689b1b89faff7db195f77a"
+    }
+  },
+  "release": "nanodesign-v0-data-2026-08-30",
+  "split_counts": {
+    "antibody_h3": {
+      "test": 984,
+      "train": 3878,
+      "validation": 438
+    },
+    "protein_binder": {
+      "test": 5110,
+      "train": 40883,
+      "validation": 5110
+    },
+    "rna_aptamer_binding": {
+      "test": 88,
+      "train": 2117,
+      "validation": 83
+    },
+    "rna_structure_prior_auxiliary": {
+      "test": 229,
+      "train": 419,
+      "validation": 234
+    }
+  },
+  "split_protocols": {
+    "antibody_h3": "SAbDab2 official antigen-aware 80/20 train/test; 10% of official train ab_ag clusters reserved for validation",
+    "protein_binder": "MMseqs2 18-8cc5c, 30% identity/80% bidirectional coverage; connected components across target and binder clusters; deterministic 80/10/10",
+    "rna": "MMseqs2 target-protein 30% and RNA 80% identity, both 80% coverage; connected components include native PDB, binding, and RNAsolo2 prior records; deterministic 80/10/10"
+  },
+  "total_samples": 59573
+}

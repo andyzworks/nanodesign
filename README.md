@@ -1,122 +1,95 @@
-# NanoDesign
+# NanoDesign v0
 
-NanoDesign v0 固定解决同一个问题：
+NanoDesign v0 只做三件事：protein binder、antibody CDR-H3 和 RNA aptamer 的
+sequence + structure design。三个任务共用同一个模型，不增加 Agent、RSI、leaderboard
+或其他外围系统。
 
-> 给定 molecular context，设计能够与 target interaction / bind 的新分子。
+## 当前完成结果
 
-v0 只有三个任务，不增加第四个任务：
+| Task | Real Data Size（train / val / test） | Baseline | Real Evaluation |
+| --- | ---: | --- | --- |
+| Protein Binder | 40,883 / 5,110 / 5,110 | NanoDesign-Tiny | Success Rate + AF2/界面指标 |
+| Antibody H3 | 3,878 / 438 / 984 | 同一个模型 | H3 AAR + framework-aligned RMSD + DockQ |
+| RNA Aptamer | 2,117 / 83 / 88 | 同一个模型 | RhoFold+ scTM/scRMSD + RNA-target DockQ |
 
-| 任务 | 固定输入 | 生成输出 |
-| --- | --- | --- |
-| Protein Binder Design | Target protein | Binder sequence + structure |
-| Antibody CDR Design | Antigen + antibody framework | CDR sequence + structure |
-| RNA Aptamer Design | Target protein | RNA aptamer sequence + structure |
+另有 RNAsolo2 structure-prior auxiliary data：419 / 234 / 229。它不属于 aptamer
+binding ground truth，也不计入上表的 RNA Aptamer 数量。
 
-三个任务共用一个 `NanoDesign-Tiny` 模型和同一套训练/采样 pipeline，不是三个独立模型。
+这些是本仓库实际下载并通过结构过滤后的数量，不是 adapter 的理论数量。完整、带 SHA256
+的 split 清单见 [data_v0_stats.json](docs/data_v0_stats.json)，各来源的过滤和拒绝统计见
+[data_reports](docs/data_reports)。
 
-## 当前做到哪里
+## 真实数据
 
-当前仓库完成的是 v0 infrastructure，不代表已经得到可用于科学结论的 trained model。
+- Protein Binder：PPIRef50K `ppiref_6A_filtered_clustered_04`，官方 51,755 个候选；
+  51,103 个可用。较长 resolved chain 固定为 target，另一条为 binder。
+- Antibody H3：SAbDab2 ML dataset 0.1.0，15,641 个官方结构；5,300 个 holo、
+  protein/peptide-antigen、完整 IMGT H3 样本可用。v0 只设计 H3。
+- RNA Aptamer binding：Ribocentre 33 个 RNA–protein contact components，加 RCSB PDB
+  2,255 个非重复实验 RNA–protein contact components，共 2,288 个样本。
+- RNA prior：RNAsolo2 882 个可用代表结构，单独存放。
 
-已经实现：
+Split 不是随机逐样本切分：PPIRef 使用 MMseqs2 30% identity/80% coverage，并对 target
+和 binder 的 homology component 做 80/10/10；SAbDab2 保留官方 antigen-aware test，
+从官方 train cluster 中固定 10% 作 validation；RNA 同时按 target protein 30% 和 RNA 80%
+聚类，并把 RNAsolo2 纳入 leakage component 后再切分。
 
-- 不可悄悄改动的三任务规格与输入/输出 contract
-- 统一 token/atom 数据格式、NPZ 序列化和 batch collator
-- 数据来源登记、manifest 指纹与 cluster-disjoint split 检查
-- RNA binding data 与 RNAsolo2 structure prior 的硬隔离
-- 冻结 RNA data pool 之前必须完成的 usable-complex inventory
-- 一个共享的 `NanoDesign-Tiny` atom/token diffusion baseline
-- 三个任务各自独立的 evaluation contract
-- 训练 step、checkpoint provenance、CLI 和测试
-
-尚未实现：真实数据下载与转换、正式 split、外部 structure predictor、DockQ/Rosetta
-执行器、已校准 success thresholds，以及正式训练。这些依赖未决科学选择，代码不会擅自决定。
-
-详细状态见 [Implementation Status](docs/IMPLEMENTATION_STATUS.md)。
-
-## 数据边界
-
-| 任务/用途 | 允许的数据源 |
-| --- | --- |
-| Protein binder binding design | PPIRef 或 PPIRef50K |
-| Antibody CDR binding design | SAbDab2 antibody-antigen complexes |
-| RNA aptamer binding design | Ribocentre Aptamer + experimental PDB RNA-target complexes |
-| RNA sequence/structure prior | RNAsolo2 |
-
-`RNAsolo2` 不能被标成 RNA-target binding 样本，也不能进入 RNA binding evaluation。
-RNA aptamer binding 样本必须包含固定 target protein；没有 target 的 RNA 样本不能通过 contract。
-
-正式处理数据前，还必须确定：
-
-- PPIRef/PPIRef50K 选择、版本、split、redundancy filter、target/binder chain 规则
-- SAbDab2 版本、H3-only/all-six、split、structure quality filter
-- RNA 三个数据源版本、quality filter、split
-- Ribocentre/PDB RNA-target 候选数、可用数和排除原因
-
-## 模型
-
-baseline 是独立实现的 small RFD3NA-style unified diffusion model：
-
-```text
-Known molecular context + noisy/masked design region
-                         ↓
-                 Atom-level encoder
-                         ↓
-              Atom → token downsampling
-                         ↓
-               Sparse token transformer
-                         ↓
-              Token → atom upsampling
-                         ↓
-           Coordinate noise + sequence logits
-```
-
-模型只支持本计划需要的 protein 和 RNA，不包含 DNA、small molecule 或其他任务。
-task、polymer、role、chain、position、time 和 design mask 都进入同一个共享模型。
-
-当前默认候选模型为 `12,161,949` 参数，处于要求的 5M–20M 范围内。它仍需在目标 GPU
-上记录 peak memory 和训练速度，完成后才能冻结为正式容量。
-
-该实现只采用公开 RFD3 的高层 atom/token 组织方式，不复制、不声称完整复现 RFD3。
-参考：[RFdiffusion3 paper](https://pmc.ncbi.nlm.nih.gov/articles/PMC12458353/) 和
-[RosettaCommons Foundry](https://github.com/RosettaCommons/foundry)。
-
-## Evaluation
-
-三个任务不合并成一个科学指标：
-
-| 任务 | 主指标 | 其他要求 |
-| --- | --- | --- |
-| Protein Binder | In-silico Success Rate | interface confidence、scRMSD、Rosetta ΔG、shape complementarity、clashes、diversity/cluster success |
-| Antibody CDR | AAR、CDR RMSD、DockQ | 必报 H3 AAR/RMSD；all-six 时逐个 CDR 报告 |
-| RNA Aptamer | scTM、scRMSD、structure confidence | 有 native complex 时报告 RNA-target DockQ |
-
-Binder 的 predictor、filters 和 thresholds 必须在 test evaluation 前冻结，并记录论文或
-calibration 来源。`DockQ`、`scTM`、`scRMSD` 不等于 binding affinity；实验 Kd 不属于 v0。
-
-## 快速检查
+生成数据的命令：
 
 ```bash
-python -m pip install -e ".[dev]"
-
-# 查看冻结规格
-nanodesign-v0 spec
-
-# 当前配置允许 TBD，但会完整列出 blockers
-nanodesign-v0 validate-config --config configs/v0.yaml --allow-tbd
-
-# 检查候选模型参数量
-nanodesign-v0 model-summary --config configs/v0.yaml
-
-# 三个任务通过同一个模型完成 forward/backward
-nanodesign-v0 smoke --config configs/v0.yaml
-
-pytest
+python scripts/prepare_v0_data.py --repo-root . ppiref --workers 8
+python scripts/prepare_v0_data.py --repo-root . sabdab2 --workers 8
+python scripts/prepare_v0_data.py --repo-root . ribocentre \
+  --structures-json data/raw/ribocentre/structures_merged.json --workers 8
+python scripts/prepare_v0_data.py --repo-root . rnasolo2 --workers 8
+python scripts/prepare_pdb_rna.py --repo-root . --workers 8
+python scripts/split_v0_data.py --repo-root .
 ```
 
-去掉 `--allow-tbd` 后，任何尚未确定的数据版本、split、CDR 范围、RNA inventory、
-design atom-slot schema、模型 capacity benchmark、外部 evaluator 或 threshold 都会阻止
-正式配置通过。
+## 可信 baseline model
 
-完整冻结规格见 [NanoDesign v0 Specification](docs/V0_SPEC.md)，数据字段见
-[Data Contract](docs/DATA_CONTRACT.md)。
+`NanoDesignTiny` 直接实例化 RosettaCommons Foundry 的公开
+`rfd3na.model.RFD3.RFD3`，固定 commit
+`aad357b776e3c0d6b973080f8f8c4bcf3ed21e40`。仓库没有重新发明 Cartesian
+Transformer，也没有复制一套“类似 RFD3NA”的 geometry block。
+
+缩小的只有 channel、Pairformer/diffusion transformer block、atom attention depth、
+recycling 和 EDM sampling steps。默认模型实测为 **6,849,538 parameters**。它保留官方
+atom attention、token initializer、Pairformer、local diffusion transformer、atom decoder、
+EDM loss/sampler，以及 RFD3NA 对 3D geometry 的处理。
+
+训练输入使用官方 atom23 layout。未知设计序列使用 `UNK` protein scheme 或 `X` RNA
+scheme，只暴露 sequence-independent backbone/CB 或 phosphate-ribose slots；不会根据 native
+residue 提前创建 residue-specific side-chain/base atoms。完整复合物保留在 catalog，训练时
+围绕 design region 选最近的固定 context tokens。
+
+模型依赖要求 Python 3.12：
+
+```bash
+python3.12 -m pip install -e '.[model,data]'
+```
+
+## 真实 evaluation
+
+- Binder：ColabFold `alphafold2_multimer_v3` 作独立结构验证；Rosetta
+  `InterfaceAnalyzer` 计算 ΔG、shape complementarity、dSASA 和界面 H-bond；success filters
+  固定自 BindCraft public defaults。预算固定为每 target 1,000 backbones × 2 sequences。
+- Antibody H3：代码强制先按 heavy-chain 非 H3 framework（加可用 light framework）Kabsch
+  对齐，再算 H3 backbone RMSD；AAR 与 DockQ v2 直接从结构运行，不允许 caller 改 alignment。
+- RNA：RhoFold+ 独立 refold，US-align RNA 计算 scTM/scRMSD，DockQ v2 计算 native
+  RNA–target interface。
+
+本地已实际 smoke-test DockQ 2.1.3、US-align v20260527、H3 AAR/RMSD 和官方 RFD3NA
+forward/backward/EDM generation。ColabFold、RhoFold+ 和 Rosetta 属于外部重量级软件；运行
+全量 benchmark 前仍需在执行机器配置其模型权重，以及 Rosetta 的许可安装。代码不会在它们
+缺失时接受手填 metric 冒充真实结果。
+
+`scTM`、`scRMSD` 和 `DockQ` 是 computational structure/interface evaluation，**不等于
+真实 binding affinity**。NanoDesign v0 不声称得到实验 Kd。
+
+## 测试
+
+```bash
+python -m pip install -e '.[data,evaluation,dev]'
+pytest
+```

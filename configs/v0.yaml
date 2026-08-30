@@ -7,18 +7,18 @@ tasks:
 
 data:
   protein_binder:
-    source: null  # Must become ppiref or ppiref50k before data preparation.
-    version: null
-    split_method: null
-    redundancy_filter: null
-    chain_assignment: null
+    source: ppiref50k
+    version: PPIRef-6A filtered_clustered_04; PDB January 2024; Zenodo 14845086
+    split_method: MMseqs2-18 protein30-cov80 connected components; deterministic 80/10/10
+    redundancy_filter: official iDist 0.04 plus cross-split protein homology components
+    chain_assignment: longer resolved chain target; shorter chain binder; tie by chain ID
 
   antibody_cdr:
     source: sabdab2
-    version: null
-    cdr_design: null  # Must become h3_only or all_six before data preparation.
-    split_method: null
-    quality_filter: null
+    version: SAbDab2 ML dataset 0.1.0; Zenodo 20083995; 2026-05-08
+    cdr_design: h3_only
+    split_method: official antigen-aware test; 10% official-train ab_ag clusters as validation
+    quality_filter: holo protein/peptide antigen; resolution <=3.5 A; complete IMGT H3 N/CA/C/O
 
   rna_aptamer:
     binding_sources:
@@ -27,40 +27,45 @@ data:
     auxiliary_sources:
       - rnasolo2
     versions:
-      ribocentre_aptamer: null
-      pdb_rna_target_complex: null
-      rnasolo2: null
+      ribocentre_aptamer: Ribocentre structures_merged.json commit 94ef203d7934 (2026-08-30 snapshot)
+      pdb_rna_target_complex: RCSB PDB Search/Data API snapshot 2026-08-30
+      rnasolo2: BGSU 4.54 (2026-08-27); PDB snapshot 2025-10-25; Rfam 15.1
     usable_complex_inventory:
-      path: null
-      sha256: null
-    split_method: null
-    quality_filter: null
+      path: rna_inventory.json
+      sha256: eff1f9872f80e2b110663f8608805f4b388d72af81f2be13f80b9fe4d3e72f9a
+    split_method: target protein30 + RNA80 cov80 connected components; deterministic 80/10/10
+    quality_filter: experimental RNA-protein; RNA 8-256; >=3 contact residues/partner within 5 A
 
 model:
   architecture: rfd3na_tiny
-  atom_dim: 128
-  token_dim: 384
-  num_layers: 6
-  num_heads: 8
-  ff_multiplier: 4
-  max_neighbors: 64
-  num_diffusion_steps: 200
-  coordinate_loss_weight: 1.0
-  sequence_loss_weight: 1.0
-  atom_slot_schema: null  # Must be sequence-independent inside the design region.
-  capacity_benchmark: null  # Must record hardware, peak memory, and step time.
+  foundry_commit: aad357b776e3c0d6b973080f8f8c4bcf3ed21e40
+  c_s: 128
+  c_z: 64
+  c_atom: 64
+  c_atompair: 16
+  c_token: 240
+  c_time: 128
+  initializer_pairformer_blocks: 1
+  diffusion_pairformer_blocks: 1
+  diffusion_transformer_blocks: 6
+  atom_encoder_blocks: 2
+  atom_decoder_blocks: 2
+  atom_attention_keys: 64
+  recycle_steps: 1
+  sampling_steps: 50
+  atom_slot_schema: atom23_unk_x_sequence_independent
+  max_context_tokens: 384
+  parameter_count: 6849538
 
 evaluation:
   protein_binder:
-    independent_structure_predictor: null
-    success_filter_profile: null
-    threshold_source: null
-
+    independent_structure_predictor: ColabFold alphafold2_multimer_v3; 5 models; 3 recycles
+    success_filter_profile: selected active core thresholds from BindCraft default_filters.json
+    threshold_source: BindCraft public defaults + RFdiffusion 1000 backbones x 2 sequences
   antibody_cdr:
-    structure_predictor: null
-    dockq_implementation: null
-    rosetta_protocol: null
-
+    structure_predictor: generated complex evaluated directly against native after fixed-framework alignment
+    dockq_implementation: DockQ 2.1.3
+    rosetta_protocol: InterfaceAnalyzer for auxiliary dG/SC metrics
   rna_aptamer:
-    rna_structure_predictor: null
-    dockq_implementation: null
+    rna_structure_predictor: RhoFold+ independent refold followed by US-align v20260527
+    dockq_implementation: DockQ 2.1.3 nucleic-acid interface support
