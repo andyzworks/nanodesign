@@ -52,9 +52,7 @@ MASK_TOKEN_ID = 1
 AA_ORDER = "ACDEFGHIKLMNPQRSTVWY"
 RNA_ORDER = "ACGU"
 AA_TOKEN_IDS = frozenset(range(2, 2 + len(AA_ORDER)))
-RNA_TOKEN_IDS = frozenset(
-    range(2 + len(AA_ORDER), 2 + len(AA_ORDER) + len(RNA_ORDER))
-)
+RNA_TOKEN_IDS = frozenset(range(2 + len(AA_ORDER), 2 + len(AA_ORDER) + len(RNA_ORDER)))
 VOCAB_SIZE = 2 + len(AA_ORDER) + len(RNA_ORDER)
 
 
@@ -66,4 +64,3 @@ def allowed_token_ids(polymer: Polymer) -> frozenset[int]:
     if polymer == Polymer.PAD:
         return frozenset({PAD_TOKEN_ID})
     raise ValueError(f"unsupported polymer: {polymer}")
-

@@ -6,7 +6,6 @@ from dataclasses import asdict, dataclass
 
 from nanodesign.v0.constants import DataSource, Polymer, Role, Task
 
-
 SPEC_VERSION = "nanodesign.v0"
 MODEL_ARCHITECTURE = "rfd3na_tiny"
 MIN_MODEL_PARAMETERS = 5_000_000
@@ -101,4 +100,3 @@ def get_v0_spec() -> V0Spec:
         parameter_range=(MIN_MODEL_PARAMETERS, MAX_MODEL_PARAMETERS),
         tasks=tuple(TASK_SPECS[task] for task in Task),
     )
-

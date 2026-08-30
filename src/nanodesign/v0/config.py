@@ -2,9 +2,10 @@
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Mapping
+from typing import Any
 
 import yaml
 
@@ -93,9 +94,20 @@ def validate_v0_config(config: Mapping[str, Any]) -> ConfigReport:
         {"source", "version", "split_method", "redundancy_filter", "chain_assignment"},
         "data.protein_binder",
     )
-    if binder["source"] not in {DataSource.PPIREF.value, DataSource.PPIREF50K.value}:
-        raise ConfigError("protein_binder source must be ppiref or ppiref50k")
-    for key in ("version", "split_method", "redundancy_filter", "chain_assignment"):
+    if binder["source"] not in {
+        None,
+        "TBD",
+        DataSource.PPIREF.value,
+        DataSource.PPIREF50K.value,
+    }:
+        raise ConfigError("protein_binder source must be ppiref, ppiref50k, or unresolved")
+    for key in (
+        "source",
+        "version",
+        "split_method",
+        "redundancy_filter",
+        "chain_assignment",
+    ):
         _need(binder[key], f"data.protein_binder.{key}", blockers)
 
     antibody = _mapping(data["antibody_cdr"], "data.antibody_cdr")
@@ -125,9 +137,7 @@ def validate_v0_config(config: Mapping[str, Any]) -> ConfigReport:
         "data.rna_aptamer",
     )
     binding_sources = _list(rna["binding_sources"], "data.rna_aptamer.binding_sources")
-    auxiliary_sources = _list(
-        rna["auxiliary_sources"], "data.rna_aptamer.auxiliary_sources"
-    )
+    auxiliary_sources = _list(rna["auxiliary_sources"], "data.rna_aptamer.auxiliary_sources")
     expected_binding = [
         DataSource.RIBOCENTRE_APTAMER.value,
         DataSource.PDB_RNA_TARGET_COMPLEX.value,
@@ -156,9 +166,7 @@ def validate_v0_config(config: Mapping[str, Any]) -> ConfigReport:
             f"data.rna_aptamer.usable_complex_inventory.{key}",
             blockers,
         )
-    _validate_sha256(
-        inventory["sha256"], "data.rna_aptamer.usable_complex_inventory.sha256"
-    )
+    _validate_sha256(inventory["sha256"], "data.rna_aptamer.usable_complex_inventory.sha256")
     for key in ("split_method", "quality_filter"):
         _need(rna[key], f"data.rna_aptamer.{key}", blockers)
 
@@ -174,10 +182,14 @@ def validate_v0_config(config: Mapping[str, Any]) -> ConfigReport:
         "num_diffusion_steps",
         "coordinate_loss_weight",
         "sequence_loss_weight",
+        "atom_slot_schema",
+        "capacity_benchmark",
     }
     _exact_keys(model, required_model_keys, "model")
     if model["architecture"] != MODEL_ARCHITECTURE:
         raise ConfigError(f"model.architecture must be {MODEL_ARCHITECTURE}")
+    _need(model["atom_slot_schema"], "model.atom_slot_schema", blockers)
+    _need(model["capacity_benchmark"], "model.capacity_benchmark", blockers)
     try:
         model_config = NanoDesignTinyConfig.from_mapping(model)
         NanoDesignTiny(model_config).validate_parameter_budget()
@@ -246,4 +258,3 @@ def validate_resolved_assets(
                 f"{record.source_version!r} != {expected_versions[record.source.value]!r}"
             )
     return report
-

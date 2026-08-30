@@ -14,6 +14,7 @@ def test_all_three_binding_contracts_and_collation():
     assert set(batch) >= {
         "atom_positions_0",
         "atom_token_index",
+        "atom_element_0",
         "design_mask",
         "token_ids_0",
     }
@@ -66,4 +67,3 @@ def test_binding_contract_rejects_roles_from_another_task():
     example.role_id[0] = int(Role.ANTIGEN)
     with pytest.raises(ContractError, match="roles must be exactly"):
         example.validate()
-

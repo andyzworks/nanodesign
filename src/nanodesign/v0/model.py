@@ -7,8 +7,8 @@ code: atom encoding/downsampling -> sparse token transformer -> atom upsampling.
 from __future__ import annotations
 
 import math
+from collections.abc import Mapping
 from dataclasses import dataclass
-from typing import Mapping
 
 import torch
 from torch import nn
@@ -55,14 +55,20 @@ class NanoDesignTinyConfig:
             raise ValueError("dropout must lie in [0, 1)")
 
     @classmethod
-    def from_mapping(cls, value: Mapping[str, object]) -> "NanoDesignTinyConfig":
+    def from_mapping(cls, value: Mapping[str, object]) -> NanoDesignTinyConfig:
         names = set(cls.__dataclass_fields__)
         model_only = {key: item for key, item in value.items() if key in names}
-        unknown = set(value) - names - {
-            "num_diffusion_steps",
-            "coordinate_loss_weight",
-            "sequence_loss_weight",
-        }
+        unknown = (
+            set(value)
+            - names
+            - {
+                "num_diffusion_steps",
+                "coordinate_loss_weight",
+                "sequence_loss_weight",
+                "atom_slot_schema",
+                "capacity_benchmark",
+            }
+        )
         if unknown:
             raise ValueError(f"unknown model config keys: {sorted(unknown)}")
         return cls(**model_only)  # type: ignore[arg-type]
@@ -78,9 +84,7 @@ def sinusoidal_time_embedding(time: torch.Tensor, dimension: int) -> torch.Tenso
     angles = time[:, None] * frequency[None, :]
     embedding = torch.cat((torch.sin(angles), torch.cos(angles)), dim=-1)
     if embedding.shape[-1] < dimension:
-        embedding = torch.nn.functional.pad(
-            embedding, (0, dimension - embedding.shape[-1])
-        )
+        embedding = torch.nn.functional.pad(embedding, (0, dimension - embedding.shape[-1]))
     return embedding
 
 
@@ -121,9 +125,9 @@ def _reference_center(
     fallback = token_mask
     has_context = context_mask.sum(dim=1, keepdim=True) > 0
     weights = torch.where(has_context, context_mask, fallback)
-    return (centers * weights[..., None]).sum(dim=1) / weights.sum(
-        dim=1, keepdim=True
-    ).clamp_min(1.0)
+    return (centers * weights[..., None]).sum(dim=1) / weights.sum(dim=1, keepdim=True).clamp_min(
+        1.0
+    )
 
 
 class SparseTokenBlock(nn.Module):
@@ -147,9 +151,7 @@ class SparseTokenBlock(nn.Module):
         )
         self.dropout = nn.Dropout(config.dropout)
 
-    def _attention_mask(
-        self, centers: torch.Tensor, token_mask: torch.Tensor
-    ) -> torch.Tensor:
+    def _attention_mask(self, centers: torch.Tensor, token_mask: torch.Tensor) -> torch.Tensor:
         batch_size, num_tokens, _ = centers.shape
         valid = token_mask.bool()
         distance = torch.cdist(centers.float(), centers.float())
@@ -225,9 +227,7 @@ class NanoDesignTiny(nn.Module):
             nn.LayerNorm(d),
         )
         self.input_norm = nn.LayerNorm(d)
-        self.blocks = nn.ModuleList(
-            SparseTokenBlock(config) for _ in range(config.num_layers)
-        )
+        self.blocks = nn.ModuleList(SparseTokenBlock(config) for _ in range(config.num_layers))
         self.final_norm = nn.LayerNorm(d)
         self.atom_decoder = nn.Sequential(
             nn.Linear(d * 2, d),
@@ -267,7 +267,7 @@ class NanoDesignTiny(nn.Module):
             "atom_positions_t",
             "atom_mask",
             "atom_token_index",
-            "atom_element",
+            "atom_element_t",
             "diffusion_time",
         }
         missing = required - set(batch)
@@ -281,36 +281,31 @@ class NanoDesignTiny(nn.Module):
         centers = _token_centers(positions, atom_to_token, atom_mask, num_tokens)
         reference = _reference_center(centers, token_mask, batch["design_mask"].float())
         relative_centers = (centers - reference[:, None, :]) * token_mask[..., None]
-        gathered_centers = centers.gather(
-            1, atom_to_token[..., None].expand(-1, -1, 3)
-        )
+        gathered_centers = centers.gather(1, atom_to_token[..., None].expand(-1, -1, 3))
         relative_positions = (positions - gathered_centers) * atom_mask[..., None]
-        atom_features = self.atom_encoder(
-            torch.cat(
-                (
-                    self.element_embedding(
-                        batch["atom_element"].long().clamp(0, self.config.max_elements - 1)
+        atom_features = (
+            self.atom_encoder(
+                torch.cat(
+                    (
+                        self.element_embedding(
+                            batch["atom_element_t"].long().clamp(0, self.config.max_elements - 1)
+                        ),
+                        self.coordinate_projection(relative_positions),
                     ),
-                    self.coordinate_projection(relative_positions),
-                ),
-                dim=-1,
+                    dim=-1,
+                )
             )
-        ) * atom_mask[..., None]
-        pooled_atoms = _scatter_atom_mean(
-            atom_features, atom_to_token, atom_mask, num_tokens
+            * atom_mask[..., None]
         )
+        pooled_atoms = _scatter_atom_mean(atom_features, atom_to_token, atom_mask, num_tokens)
         normalized_position = batch["residue_index"].float()[..., None] / 1024.0
-        time = sinusoidal_time_embedding(
-            batch["diffusion_time"].float(), self.config.token_dim
-        )
+        time = sinusoidal_time_embedding(batch["diffusion_time"].float(), self.config.token_dim)
         token_features = (
             self.token_embedding(batch["token_ids_t"].long())
             + self.polymer_embedding(batch["polymer_type"].long())
             + self.role_embedding(batch["role_id"].long())
             + self.task_embedding(batch["task_id"].long())[:, None, :]
-            + self.chain_embedding(
-                batch["chain_id"].long().clamp(0, self.config.max_chain_id)
-            )
+            + self.chain_embedding(batch["chain_id"].long().clamp(0, self.config.max_chain_id))
             + self.position_projection(normalized_position)
             + self.time_projection(time)[:, None, :]
             + self.design_projection(batch["design_mask"].float()[..., None])
@@ -325,12 +320,12 @@ class NanoDesignTiny(nn.Module):
             1,
             atom_to_token[..., None].expand(-1, -1, token_features.shape[-1]),
         )
-        coordinate_noise = self.atom_decoder(
-            torch.cat((atom_features, gathered_tokens), dim=-1)
-        ) * atom_mask[..., None]
+        coordinate_noise = (
+            self.atom_decoder(torch.cat((atom_features, gathered_tokens), dim=-1))
+            * atom_mask[..., None]
+        )
         return {
             "pred_coordinate_noise": coordinate_noise,
             "token_logits": self.sequence_head(token_features),
             "design_mask": batch["design_mask"].float(),
         }
-

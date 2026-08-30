@@ -47,9 +47,6 @@ def test_rnasolo_prior_uses_structure_cluster_without_fake_target_cluster():
         structure_cluster_id="rna-structure-1",
     )
     assert record.validate() is record
-    invalid = DatasetRecord(
-        **{**record.__dict__, "target_cluster_id": "invented-target"}
-    )
+    invalid = DatasetRecord(**{**record.__dict__, "target_cluster_id": "invented-target"})
     with pytest.raises(ManifestError, match="cannot claim"):
         invalid.validate()
-

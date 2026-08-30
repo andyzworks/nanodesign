@@ -30,4 +30,3 @@ def test_example_round_trip_and_manifest_dataset(tmp_path):
     )
     dataset = ManifestDataset(tmp_path, [record])
     assert dataset[0].sample_id == example.sample_id
-

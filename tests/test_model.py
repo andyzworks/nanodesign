@@ -45,8 +45,7 @@ def test_one_model_runs_all_three_tasks_and_backpropagates():
     losses["loss"].backward()
     assert torch.isfinite(losses["loss"])
     assert all(
-        name in losses
-        for name in ("protein_binder_loss", "antibody_cdr_loss", "rna_aptamer_loss")
+        name in losses for name in ("protein_binder_loss", "antibody_cdr_loss", "rna_aptamer_loss")
     )
 
 
@@ -57,6 +56,14 @@ def test_corruption_and_sampling_keep_context_exact():
     atom_design = diffusion.atom_design_mask(batch)
     context = (1.0 - atom_design) * batch["atom_mask"]
     assert torch.equal(
+        corrupted["atom_element_t"][atom_design.bool()],
+        torch.zeros_like(corrupted["atom_element_t"][atom_design.bool()]),
+    )
+    assert torch.equal(
+        corrupted["atom_element_t"][context.bool()],
+        batch["atom_element_0"][context.bool()],
+    )
+    assert torch.equal(
         corrupted["atom_positions_t"] * context[..., None],
         batch["atom_positions_0"] * context[..., None],
     )
@@ -65,4 +72,3 @@ def test_corruption_and_sampling_keep_context_exact():
         sampled["pred_atom_positions"] * context[..., None],
         batch["atom_positions_0"] * context[..., None],
     )
-

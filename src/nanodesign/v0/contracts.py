@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from dataclasses import dataclass
-from typing import Sequence
 
 import numpy as np
 import torch
@@ -60,7 +60,7 @@ class DesignExample:
     def num_atoms(self) -> int:
         return int(np.asarray(self.atom_positions).shape[0])
 
-    def validate(self) -> "DesignExample":
+    def validate(self) -> DesignExample:
         if self.schema_version != SPEC_VERSION:
             raise ContractError(
                 f"{self.sample_id}: schema {self.schema_version!r} must be {SPEC_VERSION!r}"
@@ -171,9 +171,7 @@ class DesignExample:
             if task != Task.RNA_APTAMER or source != DataSource.RNASOLO2:
                 raise ContractError("RNA structure-prior examples must come from RNAsolo2")
             if observed_roles != {Role.RNA_APTAMER}:
-                raise ContractError(
-                    "RNAsolo2 prior examples may contain only RNA_APTAMER tokens"
-                )
+                raise ContractError("RNAsolo2 prior examples may contain only RNA_APTAMER tokens")
             expected_design = np.ones(n, dtype=bool)
 
         if not np.array_equal(design.astype(bool), expected_design):
@@ -213,7 +211,8 @@ def collate_examples(examples: Sequence[DesignExample]) -> dict[str, torch.Tenso
         "atom_positions_t": torch.zeros((batch_size, max_atoms, 3), dtype=torch.float32),
         "atom_mask": torch.zeros((batch_size, max_atoms), dtype=torch.float32),
         "atom_token_index": torch.zeros((batch_size, max_atoms), dtype=torch.long),
-        "atom_element": torch.zeros((batch_size, max_atoms), dtype=torch.long),
+        "atom_element_0": torch.zeros((batch_size, max_atoms), dtype=torch.long),
+        "atom_element_t": torch.zeros((batch_size, max_atoms), dtype=torch.long),
         "diffusion_time": torch.zeros((batch_size,), dtype=torch.float32),
     }
     for row, example in enumerate(examples):
@@ -242,9 +241,10 @@ def collate_examples(examples: Sequence[DesignExample]) -> dict[str, torch.Tenso
         batch["atom_token_index"][row, :a] = torch.as_tensor(  # type: ignore[index]
             example.atom_token_index, dtype=torch.long
         )
-        batch["atom_element"][row, :a] = torch.as_tensor(  # type: ignore[index]
+        batch["atom_element_0"][row, :a] = torch.as_tensor(  # type: ignore[index]
             example.atom_element, dtype=torch.long
         )
+        batch["atom_element_t"][row, :a] = batch["atom_element_0"][row, :a]  # type: ignore[index]
     return batch
 
 
@@ -255,4 +255,3 @@ def batch_to_device(
         key: value.to(device) if isinstance(value, torch.Tensor) else value
         for key, value in batch.items()
     }
-

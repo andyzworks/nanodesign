@@ -13,14 +13,10 @@ from nanodesign.v0.evaluation import (
 def test_tasks_have_separate_protocols_with_exact_primary_metrics():
     assert set(PROTOCOLS) == set(Task)
     binder_primary = {
-        metric.name
-        for metric in PROTOCOLS[Task.PROTEIN_BINDER].metrics
-        if metric.tier == "primary"
+        metric.name for metric in PROTOCOLS[Task.PROTEIN_BINDER].metrics if metric.tier == "primary"
     }
     antibody_primary = {
-        metric.name
-        for metric in PROTOCOLS[Task.ANTIBODY_CDR].metrics
-        if metric.tier == "primary"
+        metric.name for metric in PROTOCOLS[Task.ANTIBODY_CDR].metrics if metric.tier == "primary"
     }
     assert binder_primary == {"in_silico_success_rate"}
     assert antibody_primary == {"cdr_aar", "cdr_rmsd", "dockq"}
@@ -75,4 +71,3 @@ def test_antibody_always_requires_h3_reporting():
             },
             cdr_design="h3_only",
         )
-

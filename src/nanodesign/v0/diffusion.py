@@ -3,8 +3,8 @@
 from __future__ import annotations
 
 import math
+from collections.abc import Mapping
 from dataclasses import dataclass
-from typing import Mapping
 
 import torch
 from torch.nn import functional as F
@@ -36,9 +36,7 @@ class DiffusionConfig:
 class UnifiedDiffusion:
     def __init__(self, config: DiffusionConfig | None = None):
         self.config = config or DiffusionConfig()
-        betas = torch.linspace(
-            self.config.beta_start, self.config.beta_end, self.config.num_steps
-        )
+        betas = torch.linspace(self.config.beta_start, self.config.beta_end, self.config.num_steps)
         self.betas = betas
         self.alphas = 1.0 - betas
         self.alpha_bar = torch.cumprod(self.alphas, dim=0)
@@ -48,9 +46,10 @@ class UnifiedDiffusion:
 
     @staticmethod
     def atom_design_mask(batch: Mapping[str, torch.Tensor]) -> torch.Tensor:
-        return batch["design_mask"].gather(
-            1, batch["atom_token_index"].long()
-        ) * batch["atom_mask"].float()
+        return (
+            batch["design_mask"].gather(1, batch["atom_token_index"].long())
+            * batch["atom_mask"].float()
+        )
 
     @staticmethod
     def _context_center(
@@ -103,8 +102,7 @@ class UnifiedDiffusion:
             + (1.0 - alpha_bar).sqrt()[:, None, None] * noise
         )
         positions_t = (
-            noisy * atom_design[..., None]
-            + positions_0 * (1.0 - atom_design[..., None])
+            noisy * atom_design[..., None] + positions_0 * (1.0 - atom_design[..., None])
         ) * atom_mask[..., None]
 
         tokens_0 = batch["token_ids_0"].long()
@@ -123,6 +121,10 @@ class UnifiedDiffusion:
                 token_loss_mask[row, candidate[0]] = True
         tokens_t = tokens_0.clone()
         tokens_t[token_loss_mask] = MASK_TOKEN_ID
+        atom_elements_0 = batch["atom_element_0"].long()
+        atom_elements_t = torch.where(
+            atom_design.bool(), torch.zeros_like(atom_elements_0), atom_elements_0
+        )
         batch.update(
             {
                 "atom_positions_t": positions_t,
@@ -131,14 +133,13 @@ class UnifiedDiffusion:
                 "diffusion_timestep": timestep,
                 "coordinate_noise_target": noise * atom_design[..., None],
                 "token_loss_mask": token_loss_mask.float(),
+                "atom_element_t": atom_elements_t,
             }
         )
         return batch
 
     @staticmethod
-    def mask_invalid_token_logits(
-        logits: torch.Tensor, polymer_type: torch.Tensor
-    ) -> torch.Tensor:
+    def mask_invalid_token_logits(logits: torch.Tensor, polymer_type: torch.Tensor) -> torch.Tensor:
         valid = torch.zeros_like(logits, dtype=torch.bool)
         protein_ids = torch.as_tensor(sorted(AA_TOKEN_IDS), device=logits.device)
         rna_ids = torch.as_tensor(sorted(RNA_TOKEN_IDS), device=logits.device)
@@ -156,9 +157,7 @@ class UnifiedDiffusion:
 
     @staticmethod
     def _task_macro_mean(value: torch.Tensor, task_id: torch.Tensor) -> torch.Tensor:
-        return torch.stack(
-            [value[task_id == task].mean() for task in torch.unique(task_id)]
-        ).mean()
+        return torch.stack([value[task_id == task].mean() for task in torch.unique(task_id)]).mean()
 
     def loss(
         self,
@@ -170,9 +169,7 @@ class UnifiedDiffusion:
             output["pred_coordinate_noise"] - batch["coordinate_noise_target"]
         ).square()
         per_example_coordinate = self._per_example_mean(coordinate_error, atom_design)
-        logits = self.mask_invalid_token_logits(
-            output["token_logits"], batch["polymer_type"]
-        )
+        logits = self.mask_invalid_token_logits(output["token_logits"], batch["polymer_type"])
         token_error = F.cross_entropy(
             logits.transpose(1, 2), batch["token_ids_0"].long(), reduction="none"
         )
@@ -237,14 +234,18 @@ class UnifiedDiffusion:
             fallback_to_all_atoms=False,
         )
         positions = (
-            (torch.randn_like(positions_0) + center[:, None, :])
-            * atom_design[..., None]
+            (torch.randn_like(positions_0) + center[:, None, :]) * atom_design[..., None]
             + positions_0 * (1.0 - atom_design[..., None])
         ) * atom_mask[..., None]
         tokens = torch.where(
             batch["design_mask"].bool(),
             torch.full_like(tokens_0, MASK_TOKEN_ID),
             tokens_0,
+        )
+        batch["atom_element_t"] = torch.where(
+            atom_design.bool(),
+            torch.zeros_like(batch["atom_element_0"]),
+            batch["atom_element_0"],
         )
         requested_steps = num_steps or self.config.num_steps
         if requested_steps < 1:
@@ -278,28 +279,23 @@ class UnifiedDiffusion:
             centered_t = positions - center[:, None, :]
             predicted_centered_0 = (
                 centered_t
-                - (1.0 - alpha_bar).sqrt()[:, None, None]
-                * output["pred_coordinate_noise"]
+                - (1.0 - alpha_bar).sqrt()[:, None, None] * output["pred_coordinate_noise"]
             ) / alpha_bar.sqrt()[:, None, None].clamp_min(1e-6)
             predicted_0 = predicted_centered_0 + center[:, None, :]
             if index + 1 < len(schedule):
                 next_value = int(schedule[index + 1].item())
                 next_t = schedule[index + 1].expand_as(t)
-                next_alpha_bar = self._schedule_value(self.alpha_bar, next_t).to(
-                    positions.dtype
-                )
+                next_alpha_bar = self._schedule_value(self.alpha_bar, next_t).to(positions.dtype)
                 positions = (
                     center[:, None, :]
                     + next_alpha_bar.sqrt()[:, None, None] * predicted_centered_0
-                    + (1.0 - next_alpha_bar).sqrt()[:, None, None]
-                    * output["pred_coordinate_noise"]
+                    + (1.0 - next_alpha_bar).sqrt()[:, None, None] * output["pred_coordinate_noise"]
                 )
                 tokens = self._partially_reveal_tokens(last_logits, batch, next_value)
             else:
                 positions = predicted_0
             positions = (
-                positions * atom_design[..., None]
-                + positions_0 * (1.0 - atom_design[..., None])
+                positions * atom_design[..., None] + positions_0 * (1.0 - atom_design[..., None])
             ) * atom_mask[..., None]
         assert last_logits is not None
         predicted_tokens = torch.where(

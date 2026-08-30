@@ -26,10 +26,7 @@ def _example(
     protein_token = min(AA_TOKEN_IDS)
     rna_token = min(RNA_TOKEN_IDS)
     token_ids = np.asarray(
-        [
-            protein_token if polymer == Polymer.PROTEIN else rna_token
-            for polymer in polymers
-        ],
+        [protein_token if polymer == Polymer.PROTEIN else rna_token for polymer in polymers],
         dtype=np.int64,
     )
     design_roles = {
@@ -38,9 +35,7 @@ def _example(
         Task.RNA_APTAMER: {Role.RNA_APTAMER},
     }[task]
     n = len(roles)
-    positions = np.stack(
-        [np.arange(n, dtype=np.float32) * 3.5, np.zeros(n), np.zeros(n)], axis=-1
-    )
+    positions = np.stack([np.arange(n, dtype=np.float32) * 3.5, np.zeros(n), np.zeros(n)], axis=-1)
     return DesignExample(
         sample_id=sample_id,
         task=task,
@@ -96,4 +91,3 @@ def synthetic_binding_examples() -> list[DesignExample]:
             [Polymer.PROTEIN, Polymer.PROTEIN, Polymer.RNA, Polymer.RNA, Polymer.RNA],
         ),
     ]
-

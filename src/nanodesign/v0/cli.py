@@ -102,15 +102,11 @@ def command_smoke(args: argparse.Namespace) -> int:
     raw_config = load_config(args.config)
     model = _model_from_config(args.config)
     batch = collate_examples(synthetic_binding_examples())
-    model_batch = {
-        key: value for key, value in batch.items() if isinstance(value, torch.Tensor)
-    }
+    model_batch = {key: value for key, value in batch.items() if isinstance(value, torch.Tensor)}
     diffusion = UnifiedDiffusion(
         DiffusionConfig(
             num_steps=int(raw_config["model"]["num_diffusion_steps"]),
-            coordinate_loss_weight=float(
-                raw_config["model"]["coordinate_loss_weight"]
-            ),
+            coordinate_loss_weight=float(raw_config["model"]["coordinate_loss_weight"]),
             sequence_loss_weight=float(raw_config["model"]["sequence_loss_weight"]),
         )
     )
@@ -170,4 +166,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-

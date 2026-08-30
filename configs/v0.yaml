@@ -7,7 +7,7 @@ tasks:
 
 data:
   protein_binder:
-    source: ppiref50k
+    source: null  # Must become ppiref or ppiref50k before data preparation.
     version: null
     split_method: null
     redundancy_filter: null
@@ -47,6 +47,8 @@ model:
   num_diffusion_steps: 200
   coordinate_loss_weight: 1.0
   sequence_loss_weight: 1.0
+  atom_slot_schema: null  # Must be sequence-independent inside the design region.
+  capacity_benchmark: null  # Must record hardware, peak memory, and step time.
 
 evaluation:
   protein_binder:
@@ -62,4 +64,3 @@ evaluation:
   rna_aptamer:
     rna_structure_predictor: null
     dockq_implementation: null
-

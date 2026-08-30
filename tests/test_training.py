@@ -25,4 +25,3 @@ def test_checkpoint_cannot_claim_formal_run_with_unresolved_config(tmp_path):
             manifest_sha256="0" * 64,
             resolved_config=load_config("configs/v0.yaml"),
         )
-

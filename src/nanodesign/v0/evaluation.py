@@ -2,9 +2,9 @@
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import dataclass
 from enum import StrEnum
-from typing import Mapping
 
 import numpy as np
 
@@ -129,22 +129,17 @@ class BinderSuccessProfile:
         filter_metrics = {
             metric.name: metric
             for metric in protocol.metrics
-            if metric.name
-            not in {"in_silico_success_rate", "diversity", "cluster_level_success"}
+            if metric.name not in {"in_silico_success_rate", "diversity", "cluster_level_success"}
         }
         unknown = {rule.metric for rule in self.rules} - set(filter_metrics)
         if unknown:
-            raise ValueError(
-                f"success profile contains unknown filter metrics: {sorted(unknown)}"
-            )
+            raise ValueError(f"success profile contains unknown filter metrics: {sorted(unknown)}")
         names = [rule.metric for rule in self.rules]
         if len(names) != len(set(names)):
             raise ValueError("success profile contains duplicate metric rules")
         for rule in self.rules:
             expected = (
-                ">="
-                if filter_metrics[rule.metric].direction == MetricDirection.HIGHER
-                else "<="
+                ">=" if filter_metrics[rule.metric].direction == MetricDirection.HIGHER else "<="
             )
             if rule.operation != expected:
                 raise ValueError(
@@ -167,9 +162,7 @@ def in_silico_success_rate(
     return float(np.mean([profile.design_passes(record) for record in records]))
 
 
-def amino_acid_recovery(
-    predicted: np.ndarray, target: np.ndarray, mask: np.ndarray
-) -> float:
+def amino_acid_recovery(predicted: np.ndarray, target: np.ndarray, mask: np.ndarray) -> float:
     predicted = np.asarray(predicted)
     target = np.asarray(target)
     mask = np.asarray(mask).astype(bool)
@@ -178,9 +171,7 @@ def amino_acid_recovery(
     return float(np.mean(predicted[mask] == target[mask]))
 
 
-def coordinate_rmsd(
-    predicted: np.ndarray, target: np.ndarray, mask: np.ndarray
-) -> float:
+def coordinate_rmsd(predicted: np.ndarray, target: np.ndarray, mask: np.ndarray) -> float:
     """Calculate RMSD after the caller applies the protocol-specific alignment."""
 
     predicted = np.asarray(predicted, dtype=np.float64)
@@ -222,7 +213,5 @@ def validate_evaluation_record(
         missing_per_cdr = per_cdr - set(metrics)
         if missing_per_cdr:
             raise ValueError(
-                "all-six-CDR evaluation is missing per-CDR metrics: "
-                f"{sorted(missing_per_cdr)}"
+                f"all-six-CDR evaluation is missing per-CDR metrics: {sorted(missing_per_cdr)}"
             )
-

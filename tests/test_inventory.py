@@ -33,9 +33,7 @@ def test_rna_inventory_covers_both_binding_sources_and_counts_usable_complexes()
 
 def test_rna_inventory_rejects_missing_source_or_unaccounted_candidates():
     with pytest.raises(InventoryError, match="exactly Ribocentre"):
-        audit_rna_complex_inventory(
-            [_record(DataSource.RIBOCENTRE_APTAMER, 10, 7)]
-        )
+        audit_rna_complex_inventory([_record(DataSource.RIBOCENTRE_APTAMER, 10, 7)])
     bad = RnaComplexInventoryRecord(
         source=DataSource.PDB_RNA_TARGET_COMPLEX,
         source_version="frozen-version",
@@ -46,4 +44,3 @@ def test_rna_inventory_rejects_missing_source_or_unaccounted_candidates():
     )
     with pytest.raises(InventoryError, match="does not equal candidates"):
         bad.validate()
-

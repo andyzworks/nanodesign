@@ -5,9 +5,9 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+from collections.abc import Mapping
 from dataclasses import asdict, dataclass
 from pathlib import Path
-from typing import Mapping
 
 import torch
 
@@ -45,9 +45,7 @@ def train_step(
     gradient_norm = torch.nn.utils.clip_grad_norm_(model.parameters(), config.gradient_clip)
     optimizer.step()
     return {
-        key: float(value.detach().item())
-        for key, value in losses.items()
-        if value.ndim == 0
+        key: float(value.detach().item()) for key, value in losses.items() if value.ndim == 0
     } | {"gradient_norm": float(gradient_norm)}
 
 
@@ -120,7 +118,7 @@ def load_checkpoint(
         raise ValueError("checkpoint parameter count mismatch")
     resolved_config = checkpoint.get("resolved_config")
     if not isinstance(resolved_config, Mapping):
-        raise ValueError("checkpoint is missing its resolved configuration")
+        raise TypeError("checkpoint is missing its resolved configuration")
     config_json = json.dumps(resolved_config, sort_keys=True, separators=(",", ":"))
     config_sha256 = hashlib.sha256(config_json.encode()).hexdigest()
     if checkpoint.get("config_sha256") != config_sha256:
@@ -134,4 +132,3 @@ def load_checkpoint(
     if optimizer is not None:
         optimizer.load_state_dict(checkpoint["optimizer"])
     return checkpoint
-

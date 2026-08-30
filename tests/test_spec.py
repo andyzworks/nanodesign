@@ -24,4 +24,3 @@ def test_rna_aptamer_is_target_conditioned_and_rnasolo_is_auxiliary():
         DataSource.PDB_RNA_TARGET_COMPLEX,
     )
     assert spec.auxiliary_sources == (DataSource.RNASOLO2,)
-
