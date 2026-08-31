@@ -75,7 +75,10 @@ def _spec(**changes) -> FeatureCacheSpec:
 def test_sqlite_cache_roundtrip_binds_identity_and_exact_tensors(tmp_path):
     row, batch, spec = _row(), _batch(), _spec()
     with SQLiteFeatureCache(tmp_path, readonly=False) as cache:
+        assert not cache.contains_valid(row, spec)
         database = cache.put(row, spec, batch)
+        assert cache.contains_valid(row, spec)
+        assert not cache.contains_valid(row, _spec(manifest_sha256="b" * 64))
     assert database == cache_database_path(tmp_path, "antibody_cdr", "test")
     connection = sqlite3.connect(database)
     payload = connection.execute("SELECT payload FROM features").fetchone()[0]

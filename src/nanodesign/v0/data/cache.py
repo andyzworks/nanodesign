@@ -347,6 +347,32 @@ class SQLiteFeatureCache:
         self._lru.clear()
         return path
 
+    def contains_valid(self, row: dict[str, Any], spec: FeatureCacheSpec) -> bool:
+        """Return whether a resumable writer already contains this exact intact row."""
+
+        if self.readonly:
+            raise FeatureCacheError("resumable cache checks require a writable feature cache")
+        expected = _canonical_json(_identity(row, spec))
+        path = _row_database_path(self.cache_root, row)
+        record = (
+            self._connection(path)
+            .execute(
+                "SELECT identity_json, payload, payload_sha256, payload_size "
+                "FROM features WHERE sample_id = ?",
+                (row["sample_id"],),
+            )
+            .fetchone()
+        )
+        if record is None:
+            return False
+        identity_json, payload, payload_sha, payload_size = record
+        payload = bytes(payload)
+        return bool(
+            identity_json == expected
+            and payload_size == len(payload)
+            and payload_sha == hashlib.sha256(payload).hexdigest()
+        )
+
     def get(self, row: dict[str, Any], spec: FeatureCacheSpec) -> dict[str, Any]:
         expected = _identity(row, spec)
         path = _row_database_path(self.cache_root, row)

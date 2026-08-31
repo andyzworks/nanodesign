@@ -100,6 +100,11 @@ def main() -> None:
     if not args.preflight_only:
         with SQLiteFeatureCache(args.cache_root, readonly=False, lru_size=0) as cache:
             for index, row in enumerate(rows, 1):
+                if cache.contains_valid(row, specs[row["sample_id"]]):
+                    timings["resumed_rows"] += 1
+                    if index % 100 == 0 or index == len(rows):
+                        print(f"cached {index}/{len(rows)} (resumed)", flush=True)
+                    continue
                 started = time.perf_counter()
                 batch = preprocess_feature_batch(root, row, specs[row["sample_id"]])
                 timings["preprocessing_seconds"] += time.perf_counter() - started
