@@ -28,6 +28,7 @@ from nanodesign.v0.data.loader import (
 )
 from nanodesign.v0.data.real import load_foundry_training_example, load_split_catalog
 from nanodesign.v0.distributed import (
+    SIZE_PACKING_GROUP_SIZE,
     SIZE_PACKING_VERSION,
     DistributedContext,
     all_gather_objects,
@@ -371,7 +372,9 @@ def main() -> None:
     for task_index, (task, rows) in enumerate(train_rows.items()):
         shuffled[task] = size_aware_rank_packing(
             rows,
-            world_size=distributed.world_size,
+            # A fixed flattened order makes 1/2/4-GPU scaling consume exactly the
+            # same samples while retaining size-homogeneous 4-rank global batches.
+            world_size=SIZE_PACKING_GROUP_SIZE,
             seed=args.seed + task_index,
             max_context_tokens=max_context_tokens,
         )
@@ -781,7 +784,7 @@ def main() -> None:
         "size_aware_rank_packing": {
             "version": SIZE_PACKING_VERSION,
             "size_identity": "catalog row + max_context_tokens -> Foundry protein14/RNA23 atoms",
-            "global_group_size": distributed.world_size,
+            "global_group_size": SIZE_PACKING_GROUP_SIZE,
             "synchronized_standard_max_atoms": STANDARD_MODE_MAX_ATOMS,
         },
         "validation_samples_per_task": args.validation_samples_per_task,

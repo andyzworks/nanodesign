@@ -11,7 +11,8 @@ from typing import Any
 import torch
 import torch.distributed as dist
 
-SIZE_PACKING_VERSION = "catalog-polymer-slots-v1"
+SIZE_PACKING_VERSION = "catalog-polymer-slots-fixed4-v2"
+SIZE_PACKING_GROUP_SIZE = 4
 PROTEIN_ATOM_SLOTS = 14
 RNA_ATOM_SLOTS = 23
 

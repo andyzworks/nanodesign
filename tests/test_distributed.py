@@ -110,6 +110,26 @@ def test_distributed_assignment_preserves_task_rotation_and_shards_samples():
     assert not set(first) & set(second)
 
 
+def test_fixed_four_way_packing_exposes_same_flattened_samples_at_1_2_4_ranks():
+    rows = [_sized_row(f"sample-{index}", index + 8) for index in range(16)]
+    packed = size_aware_rank_packing(rows, world_size=4, seed=7, max_context_tokens=384)
+    expected = [row["sample_id"] for row in packed[:8]]
+    for world_size in (1, 2, 4):
+        observed = []
+        for step in range(8 // world_size):
+            observed.extend(
+                row_for_rank(
+                    {"protein_binder": packed},
+                    ["protein_binder"],
+                    optimizer_step=step,
+                    rank=rank,
+                    world_size=world_size,
+                )["sample_id"]
+                for rank in range(world_size)
+            )
+        assert observed == expected
+
+
 def test_validation_shards_have_no_duplicates_or_omissions():
     shards = [list(validation_indices(11, rank=rank, world_size=4)) for rank in range(4)]
     flattened = [index for shard in shards for index in shard]
