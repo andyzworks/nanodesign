@@ -95,13 +95,71 @@ def command_model_summary(args: argparse.Namespace) -> int:
     return 0
 
 
+def _binder_generation_context(
+    args: argparse.Namespace,
+) -> tuple[list[str], str, dict[str, object] | None]:
+    if args.generation_metadata is None:
+        if not args.target_chains or not args.binder_chain:
+            raise ValueError(
+                "target-chains and binder-chain are required without generation metadata"
+            )
+        return list(args.target_chains), args.binder_chain, None
+    metadata_path = Path(args.generation_metadata).resolve()
+    metadata = json.loads(metadata_path.read_text(encoding="utf-8"))
+    if not isinstance(metadata, dict):
+        raise TypeError("generation metadata must be a JSON object")
+    tasks = metadata.get("tasks", metadata.get("generation"))
+    if not isinstance(tasks, dict) or not isinstance(tasks.get("protein_binder"), dict):
+        raise TypeError("generation metadata lacks tasks.protein_binder")
+    binder = tasks["protein_binder"]
+    generated_path = Path(binder.get("structure_path", "")).resolve()
+    if generated_path != Path(args.generated_complex).resolve():
+        raise ValueError("generated complex does not match generation metadata")
+    target_chains = binder.get("target_chains")
+    binder_chain = binder.get("binder_chain")
+    if (
+        not isinstance(target_chains, list)
+        or not target_chains
+        or not all(isinstance(chain, str) and chain for chain in target_chains)
+        or not isinstance(binder_chain, str)
+        or not binder_chain
+        or binder_chain in target_chains
+    ):
+        raise ValueError("generation metadata has invalid protein binder chain roles")
+    if args.target_chains is not None and target_chains != list(args.target_chains):
+        raise ValueError("target chains do not match generation metadata")
+    if args.binder_chain is not None and binder_chain != args.binder_chain:
+        raise ValueError("binder chain does not match generation metadata")
+    required = (
+        "checkpoint",
+        "samples_seen",
+        "optimizer_step",
+        "manifest_sha256",
+        "config_sha256",
+    )
+    missing = [key for key in required if key not in metadata]
+    missing.extend(
+        f"tasks.protein_binder.{key}" for key in ("sample_id", "seed") if key not in binder
+    )
+    if missing:
+        raise ValueError(f"generation metadata lacks provenance fields: {missing}")
+    provenance = {
+        "metadata_path": str(metadata_path),
+        "sample_id": binder["sample_id"],
+        "seed": int(binder["seed"]),
+        **{key: metadata[key] for key in required},
+    }
+    return target_chains, binder_chain, provenance
+
+
 def command_evaluate_protein_binder(args: argparse.Namespace) -> int:
     """Run the frozen binder evaluator and persist its per-design result."""
 
+    target_chains, binder_chain, provenance = _binder_generation_context(args)
     result = evaluate_protein_binder(
         args.generated_complex,
-        target_chains=args.target_chains,
-        binder_chain=args.binder_chain,
+        target_chains=target_chains,
+        binder_chain=binder_chain,
         output_dir=args.output_dir,
         colabfold_executable=args.colabfold_executable,
         rosetta_executable=args.rosetta_executable,
@@ -110,12 +168,14 @@ def command_evaluate_protein_binder(args: argparse.Namespace) -> int:
     )
     payload = {
         "generated_complex": str(Path(args.generated_complex).resolve()),
-        "target_chains": list(args.target_chains),
-        "binder_chain": args.binder_chain,
+        "target_chains": target_chains,
+        "binder_chain": binder_chain,
         "metrics": result.metrics,
         "passed": result.passed,
         "in_silico_success_rate": float(result.passed),
     }
+    if provenance is not None:
+        payload["generation_provenance"] = provenance
     result_json = Path(args.result_json)
     result_json.parent.mkdir(parents=True, exist_ok=True)
     result_json.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
@@ -153,8 +213,8 @@ def build_parser() -> argparse.ArgumentParser:
         help="run the frozen ColabFold/Rosetta binder protocol for one generated complex",
     )
     evaluate_binder.add_argument("--generated-complex", required=True)
-    evaluate_binder.add_argument("--target-chains", nargs="+", required=True)
-    evaluate_binder.add_argument("--binder-chain", required=True)
+    evaluate_binder.add_argument("--target-chains", nargs="+")
+    evaluate_binder.add_argument("--binder-chain")
     evaluate_binder.add_argument("--output-dir", required=True)
     evaluate_binder.add_argument("--result-json", required=True)
     evaluate_binder.add_argument("--colabfold-executable", default="colabfold_batch")
@@ -163,6 +223,10 @@ def build_parser() -> argparse.ArgumentParser:
     )
     evaluate_binder.add_argument("--pyrosetta-python")
     evaluate_binder.add_argument("--pyrosetta-analyzer-script")
+    evaluate_binder.add_argument(
+        "--generation-metadata",
+        help="optional milestone metadata.json used to validate and preserve provenance",
+    )
     evaluate_binder.set_defaults(function=command_evaluate_protein_binder)
     return parser
 

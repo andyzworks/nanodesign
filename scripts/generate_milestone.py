@@ -154,6 +154,19 @@ def run(args: argparse.Namespace, *, root: Path | None = None) -> dict[str, Any]
             ),
             "execution_mode": getattr(model, "last_execution_mode", "standard"),
         }
+        if task == "protein_binder":
+            target_chains = [
+                chain["chain_id"] for chain in row["chains"] if chain["role"] == "target"
+            ]
+            binder_chains = [
+                chain["chain_id"] for chain in row["chains"] if chain["role"] == "binder"
+            ]
+            if not target_chains or len(binder_chains) != 1:
+                raise ValueError(
+                    "protein binder generation requires target chain(s) and one binder chain"
+                )
+            tasks[task]["target_chains"] = target_chains
+            tasks[task]["binder_chain"] = binder_chains[0]
     metadata = {
         "samples_seen": samples_seen,
         "optimizer_step": int(checkpoint["step"]),

@@ -106,6 +106,8 @@ def test_milestone_runner_validates_checkpoint_and_writes_all_three_tasks(tmp_pa
     assert set(metadata["tasks"]) == set(runner.SPLITS)
     assert metadata["generation"] == metadata["tasks"]
     assert [metadata["tasks"][task]["seed"] for task in runner.SPLITS] == [17, 18, 19]
+    assert metadata["tasks"]["protein_binder"]["target_chains"] == ["A"]
+    assert metadata["tasks"]["protein_binder"]["binder_chain"] == "B"
     assert all((output / f"{task}.pdb").is_file() for task in runner.SPLITS)
     assert json.loads((output / "metadata.json").read_text()) == metadata
 

@@ -98,3 +98,114 @@ def test_binder_cli_accepts_binary_rosetta_backend(tmp_path, monkeypatch):
     assert captured["rosetta_executable"] == "/tools/InterfaceAnalyzer.linuxgccrelease"
     assert captured["pyrosetta_python"] is None
     assert captured["pyrosetta_analyzer_script"] is None
+
+
+def test_binder_cli_validates_and_preserves_generation_provenance(tmp_path, monkeypatch):
+    generated = tmp_path / "generated.pdb"
+    generated.write_text("END\n", encoding="utf-8")
+    metadata = tmp_path / "metadata.json"
+    metadata.write_text(
+        json.dumps(
+            {
+                "checkpoint": "/runs/milestone.pt",
+                "samples_seen": 3000,
+                "optimizer_step": 750,
+                "manifest_sha256": "a" * 64,
+                "config_sha256": "b" * 64,
+                "tasks": {
+                    "protein_binder": {
+                        "sample_id": "ppiref50k:174l_A_B",
+                        "seed": 17,
+                        "structure_path": str(generated.resolve()),
+                        "target_chains": ["A"],
+                        "binder_chain": "B",
+                    }
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+    captured = {}
+
+    def fake_evaluate(*args, **kwargs):
+        captured.update(kwargs)
+        return ProteinBinderResult(metrics={}, passed=False)
+
+    monkeypatch.setattr(cli, "evaluate_protein_binder", fake_evaluate)
+    result_json = tmp_path / "result.json"
+    args = cli.build_parser().parse_args(
+        [
+            "evaluate-protein-binder",
+            "--generated-complex",
+            str(generated),
+            "--output-dir",
+            str(tmp_path / "work"),
+            "--result-json",
+            str(result_json),
+            "--generation-metadata",
+            str(metadata),
+        ]
+    )
+
+    assert args.function(args) == 0
+    assert captured["target_chains"] == ["A"]
+    assert captured["binder_chain"] == "B"
+    assert json.loads(result_json.read_text(encoding="utf-8"))["generation_provenance"] == {
+        "metadata_path": str(metadata.resolve()),
+        "sample_id": "ppiref50k:174l_A_B",
+        "seed": 17,
+        "checkpoint": "/runs/milestone.pt",
+        "samples_seen": 3000,
+        "optimizer_step": 750,
+        "manifest_sha256": "a" * 64,
+        "config_sha256": "b" * 64,
+    }
+
+
+def test_binder_cli_rejects_chain_override_that_disagrees_with_metadata(tmp_path):
+    generated = tmp_path / "generated.pdb"
+    generated.write_text("END\n", encoding="utf-8")
+    metadata = tmp_path / "metadata.json"
+    metadata.write_text(
+        json.dumps(
+            {
+                "checkpoint": "/runs/milestone.pt",
+                "samples_seen": 3000,
+                "optimizer_step": 750,
+                "manifest_sha256": "a" * 64,
+                "config_sha256": "b" * 64,
+                "tasks": {
+                    "protein_binder": {
+                        "sample_id": "ppiref50k:174l_A_B",
+                        "seed": 17,
+                        "structure_path": str(generated.resolve()),
+                        "target_chains": ["A"],
+                        "binder_chain": "B",
+                    }
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+    args = cli.build_parser().parse_args(
+        [
+            "evaluate-protein-binder",
+            "--generated-complex",
+            str(generated),
+            "--target-chains",
+            "C",
+            "--output-dir",
+            str(tmp_path / "work"),
+            "--result-json",
+            str(tmp_path / "result.json"),
+            "--generation-metadata",
+            str(metadata),
+        ]
+    )
+
+    try:
+        args.function(args)
+    except ValueError as error:
+        assert str(error) == "target chains do not match generation metadata"
+    else:
+        raise AssertionError("mismatched chain override was accepted")
