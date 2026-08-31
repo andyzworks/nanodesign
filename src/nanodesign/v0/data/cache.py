@@ -487,12 +487,20 @@ def stage_cache_database(
     """Copy one finalized task/split database to node-local storage and verify it."""
 
     source = cache_database_path(shared_cache_root, task, split)
-    verify_finalized_database(source)
+    sidecar = _database_sidecar(source)
+    try:
+        source_metadata = json.loads(sidecar.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as error:
+        raise FeatureCacheError(
+            f"missing or invalid database checksum sidecar: {sidecar}"
+        ) from error
+    if source_metadata.get("size_bytes") != source.stat().st_size:
+        raise FeatureCacheError(f"finalized database size mismatch: {source}")
     destination = cache_database_path(stage_root, task, split)
     destination.parent.mkdir(parents=True, exist_ok=True)
     for source_path, destination_path in (
         (source, destination),
-        (_database_sidecar(source), _database_sidecar(destination)),
+        (sidecar, _database_sidecar(destination)),
     ):
         temporary = destination_path.with_suffix(destination_path.suffix + ".tmp")
         shutil.copy2(source_path, temporary)

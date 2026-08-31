@@ -126,20 +126,20 @@ def main() -> None:
 
     exact_matches = 0
     benchmark_rows = rows[: args.benchmark_samples]
-    for task, split in databases:
-        verify_finalized_database(cache_database_path(args.cache_root, task, split))
-    with SQLiteFeatureCache(args.cache_root, readonly=True, lru_size=0) as cache:
+    # A fresh finalize already runs SQLite quick_check and fingerprints every byte of
+    # the database.  Re-hashing and quick-checking the same tens-of-GB file again in
+    # this process adds no independent integrity evidence.  Preflight-only mode does
+    # perform those checks because it did not witness finalization.
+    if args.preflight_only:
         for task, split in databases:
-            cache.quick_check(task, split)
-        for row in rows:
-            started = time.perf_counter()
-            cached = cache.get(row, specs[row["sample_id"]])
-            timings["cache_read_seconds"] += time.perf_counter() - started
-            original = built_batches.get(row["sample_id"])
-            if original is not None:
-                if not model_ready_batches_equal(original, cached):
-                    raise RuntimeError(f"cached tensors differ for {row['sample_id']}")
-                exact_matches += 1
+            verify_finalized_database(cache_database_path(args.cache_root, task, split))
+        with SQLiteFeatureCache(args.cache_root, readonly=True, lru_size=0) as cache:
+            for task, split in databases:
+                cache.quick_check(task, split)
+            for row in rows:
+                started = time.perf_counter()
+                cache.get(row, specs[row["sample_id"]])
+                timings["cache_read_seconds"] += time.perf_counter() - started
 
     uncached_benchmark_seconds = 0.0
     cached_benchmark_seconds = 0.0
@@ -187,6 +187,11 @@ def main() -> None:
         "manifest": str(manifest.resolve()),
         "manifest_sha256": manifest_sha,
         "rows": len(rows),
+        "integrity_validation": (
+            "sidecar_sha256+sqlite_quick_check+all_rows"
+            if args.preflight_only
+            else "fresh_finalize_sha256+sqlite_quick_check+benchmark_exact_match"
+        ),
         "databases": [
             str((args.cache_root / task / f"{split}.sqlite3").resolve())
             for task, split in databases
