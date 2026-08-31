@@ -585,6 +585,16 @@ def main() -> None:
                 "gpu_hours": (
                     elapsed * distributed.world_size / 3600 if device.type == "cuda" else 0.0
                 ),
+                "optimization_wall_seconds": float(
+                    sum(float(record.get("step_wall_seconds", 0.0)) for record in history)
+                ),
+                "optimization_gpu_hours": float(
+                    sum(float(record.get("step_wall_seconds", 0.0)) for record in history)
+                    * distributed.world_size
+                    / 3600
+                    if device.type == "cuda"
+                    else 0.0
+                ),
                 "train_loss_per_task": {
                     task_name: float(
                         np.mean(
@@ -627,6 +637,7 @@ def main() -> None:
         )
 
     for step in range(start_step, total_steps):
+        step_started = time.monotonic()
         task = task_for_step(task_names, step)
         row = row_for_rank(
             shuffled,
@@ -670,12 +681,18 @@ def main() -> None:
         if local_execution_mode not in {"standard", "chunked"}:
             raise RuntimeError(f"model reported unknown execution mode {local_execution_mode!r}")
         execution_modes = all_gather_objects(local_execution_mode, distributed.world_size)
+        step_wall = torch.tensor(
+            time.monotonic() - step_started, dtype=torch.float64, device=device
+        )
+        if distributed.world_size > 1:
+            dist.all_reduce(step_wall, op=dist.ReduceOp.MAX)
         history.append(
             {
                 "step": step + 1,
                 "task": task,
                 "sample_ids": sample_ids,
                 "execution_modes": execution_modes,
+                "step_wall_seconds": float(step_wall.item()),
                 **metrics,
             }
         )
@@ -779,6 +796,16 @@ def main() -> None:
         "generation": generation,
         "checkpoint_step": total_steps,
         "history": history,
+        "optimization_wall_seconds": float(
+            sum(float(record.get("step_wall_seconds", 0.0)) for record in history)
+        ),
+        "optimization_gpu_hours": float(
+            sum(float(record.get("step_wall_seconds", 0.0)) for record in history)
+            * distributed.world_size
+            / 3600
+            if device.type == "cuda"
+            else 0.0
+        ),
         "data_loader": {
             "feature_cache_enabled": args.feature_cache_root is not None,
             "selected_cache_root": (
