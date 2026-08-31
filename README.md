@@ -71,6 +71,18 @@ residue 提前创建 residue-specific side-chain/base atoms。完整复合物保
 python3.12 -m pip install -e '.[model,data]'
 ```
 
+GPU 训练环境必须另外安装 CUDA-enabled PyTorch；普通 PyPI 在无 CUDA 的安装节点上可能
+解析成 CPU-only wheel。本次冻结环境使用与 Foundry 兼容的 PyTorch 2.7.1 + CUDA 12.8：
+
+```bash
+python3.12 -m pip install --force-reinstall 'torch==2.7.1' \
+  --index-url https://download.pytorch.org/whl/cu128
+python3.12 -c "import torch; assert torch.backends.cuda.is_built()"
+```
+
+正式 Slurm 命令还会在训练前强制检查 `torch.cuda.is_available()`，避免 CPU wheel 静默占用
+GPU allocation。
+
 ## 真实 evaluation
 
 - Binder：ColabFold `alphafold2_multimer_v3` 作独立结构验证；Rosetta
