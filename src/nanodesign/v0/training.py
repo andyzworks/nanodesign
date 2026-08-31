@@ -338,7 +338,7 @@ def _assert_model_matches_resolved_config(
         )
 
 
-def _rng_state() -> dict[str, object]:
+def capture_rng_state() -> dict[str, object]:
     return {
         "python": random.getstate(),
         "numpy": np.random.get_state(),
@@ -347,7 +347,7 @@ def _rng_state() -> dict[str, object]:
     }
 
 
-def _restore_rng_state(state: Mapping[str, object]) -> None:
+def restore_rng_state(state: Mapping[str, object]) -> None:
     required = {"python", "numpy", "torch", "cuda"}
     if required - set(state):
         raise ValueError(f"checkpoint RNG state is missing {sorted(required - set(state))}")
@@ -377,12 +377,17 @@ def save_checkpoint(
     history: list[Mapping[str, Any]] | None = None,
     training_run_config: Mapping[str, object] | None = None,
     validation_before: Mapping[str, object] | None = None,
+    rng_states_by_rank: list[Mapping[str, object]] | None = None,
+    milestone_records: list[Mapping[str, Any]] | None = None,
+    elapsed_wall_seconds: float = 0.0,
 ) -> None:
     if step < 0:
         raise ValueError("checkpoint step must be non-negative")
     samples_seen = step if samples_seen is None else samples_seen
     if samples_seen < step:
         raise ValueError("checkpoint samples_seen cannot be smaller than step")
+    if elapsed_wall_seconds < 0:
+        raise ValueError("checkpoint elapsed wall time must be non-negative")
     for name, values in (("task_cursors", task_cursors), ("task_steps", task_steps)):
         if values is not None and any(int(value) < 0 for value in values.values()):
             raise ValueError(f"checkpoint {name} must be non-negative")
@@ -402,7 +407,10 @@ def save_checkpoint(
         "history": list(history or []),
         "training_run_config": dict(training_run_config or {}),
         "validation_before": dict(validation_before or {}),
-        "rng_state": _rng_state(),
+        "milestone_records": list(milestone_records or []),
+        "elapsed_wall_seconds": float(elapsed_wall_seconds),
+        "rng_state": capture_rng_state(),
+        "rng_states_by_rank": [dict(value) for value in (rng_states_by_rank or [])],
         "manifest_sha256": manifest_sha256,
         "resolved_config": dict(resolved_config),
         "config_sha256": hashlib.sha256(config_json.encode()).hexdigest(),
@@ -423,6 +431,7 @@ def load_checkpoint(
     optimizer: torch.optim.Optimizer | None = None,
     expected_manifest_sha256: str | None = None,
     restore_rng: bool = False,
+    rng_rank: int = 0,
 ) -> dict[str, object]:
     checkpoint = torch.load(path, map_location="cpu", weights_only=False)
     if checkpoint.get("schema_version") != SPEC_VERSION:
@@ -448,8 +457,16 @@ def load_checkpoint(
     if optimizer is not None:
         optimizer.load_state_dict(checkpoint["optimizer"])
     if restore_rng:
-        rng_state = checkpoint.get("rng_state")
+        ranked_states = checkpoint.get("rng_states_by_rank")
+        if ranked_states:
+            if not 0 <= rng_rank < len(ranked_states):
+                raise ValueError("checkpoint has no RNG state for this rank")
+            rng_state = ranked_states[rng_rank]
+        else:
+            if rng_rank != 0:
+                raise ValueError("single-rank checkpoint has no RNG state for this rank")
+            rng_state = checkpoint.get("rng_state")
         if not isinstance(rng_state, Mapping):
             raise TypeError("checkpoint is missing its RNG state")
-        _restore_rng_state(rng_state)
+        restore_rng_state(rng_state)
     return checkpoint

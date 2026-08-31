@@ -12,7 +12,9 @@ from nanodesign.v0.training import (
     TrainingConfig,
     _assert_model_matches_resolved_config,
     build_optimizer,
+    capture_rng_state,
     load_checkpoint,
+    restore_rng_state,
     save_checkpoint,
     write_generation_structure,
 )
@@ -139,6 +141,44 @@ def test_checkpoint_resume_matches_uninterrupted_stochastic_training(tmp_path):
     _assert_nested_equal(continuous_next_rng, resumed_next_rng)
     assert loaded["samples_seen"] == interrupted_at
     assert loaded["task_cursors"] == {"protein_binder": 1, "antibody_h3": 1, "rna": 0}
+
+
+def test_checkpoint_restores_rank_specific_rng_and_has_unwrapped_model_keys(tmp_path):
+    resolved = load_config("configs/v0.yaml")
+    _seed_all(3)
+    model = _CheckpointModel()
+    optimizer = build_optimizer(model)
+    rank_states = []
+    expected_next = []
+    for seed in (101, 102):
+        _seed_all(seed)
+        state = capture_rng_state()
+        rank_states.append(state)
+        expected_next.append((random.random(), float(np.random.random()), torch.rand(())))
+        restore_rng_state(state)
+    path = tmp_path / "distributed.pt"
+    save_checkpoint(
+        path,
+        model=model,
+        optimizer=optimizer,
+        step=1,
+        samples_seen=2,
+        rng_states_by_rank=rank_states,
+        manifest_sha256="b" * 64,
+        resolved_config=resolved,
+    )
+    restored = _CheckpointModel()
+    load_checkpoint(
+        path,
+        model=restored,
+        expected_manifest_sha256="b" * 64,
+        restore_rng=True,
+        rng_rank=1,
+    )
+    observed = (random.random(), float(np.random.random()), torch.rand(()))
+    _assert_nested_equal(expected_next[1], observed)
+    payload = torch.load(path, map_location="cpu", weights_only=False)
+    assert all(not key.startswith("module.") for key in payload["model"])
 
 
 def test_generation_export_enforces_polymer_alphabets_and_writes_predicted_atoms(tmp_path):
