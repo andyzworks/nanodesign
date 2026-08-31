@@ -18,6 +18,7 @@ from nanodesign.v0.data.inventory import (
 )
 from nanodesign.v0.data.manifest import audit_manifest, load_manifest
 from nanodesign.v0.evaluation import PROTOCOLS
+from nanodesign.v0.evaluators import evaluate_protein_binder
 from nanodesign.v0.model import NanoDesignTiny, NanoDesignTinyConfig
 from nanodesign.v0.spec import get_v0_spec
 
@@ -94,6 +95,34 @@ def command_model_summary(args: argparse.Namespace) -> int:
     return 0
 
 
+def command_evaluate_protein_binder(args: argparse.Namespace) -> int:
+    """Run the frozen binder evaluator and persist its per-design result."""
+
+    result = evaluate_protein_binder(
+        args.generated_complex,
+        target_chains=args.target_chains,
+        binder_chain=args.binder_chain,
+        output_dir=args.output_dir,
+        colabfold_executable=args.colabfold_executable,
+        rosetta_executable=args.rosetta_executable,
+        pyrosetta_python=args.pyrosetta_python,
+        pyrosetta_analyzer_script=args.pyrosetta_analyzer_script,
+    )
+    payload = {
+        "generated_complex": str(Path(args.generated_complex).resolve()),
+        "target_chains": list(args.target_chains),
+        "binder_chain": args.binder_chain,
+        "metrics": result.metrics,
+        "passed": result.passed,
+        "in_silico_success_rate": float(result.passed),
+    }
+    result_json = Path(args.result_json)
+    result_json.parent.mkdir(parents=True, exist_ok=True)
+    result_json.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    print(json.dumps(payload, indent=2, sort_keys=True))
+    return 0
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=__doc__)
     subparsers = parser.add_subparsers(dest="command", required=True)
@@ -119,6 +148,22 @@ def build_parser() -> argparse.ArgumentParser:
     model_summary = subparsers.add_parser("model-summary")
     model_summary.add_argument("--config", default="configs/v0.yaml")
     model_summary.set_defaults(function=command_model_summary)
+    evaluate_binder = subparsers.add_parser(
+        "evaluate-protein-binder",
+        help="run the frozen ColabFold/Rosetta binder protocol for one generated complex",
+    )
+    evaluate_binder.add_argument("--generated-complex", required=True)
+    evaluate_binder.add_argument("--target-chains", nargs="+", required=True)
+    evaluate_binder.add_argument("--binder-chain", required=True)
+    evaluate_binder.add_argument("--output-dir", required=True)
+    evaluate_binder.add_argument("--result-json", required=True)
+    evaluate_binder.add_argument("--colabfold-executable", default="colabfold_batch")
+    evaluate_binder.add_argument(
+        "--rosetta-executable", default="InterfaceAnalyzer.linuxgccrelease"
+    )
+    evaluate_binder.add_argument("--pyrosetta-python")
+    evaluate_binder.add_argument("--pyrosetta-analyzer-script")
+    evaluate_binder.set_defaults(function=command_evaluate_protein_binder)
     return parser
 
 
