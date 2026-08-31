@@ -346,11 +346,25 @@ def evaluate_antibody_h3(
     *,
     heavy_chain: str,
     light_chain: str | None = None,
+    antigen_chains: Sequence[str] | None = None,
     dockq_executable: str | Path = "DockQ",
 ) -> AntibodyH3Result:
     """Run the fixed v0 H3 protocol and DockQ v2 on an antibody complex."""
 
     predicted_model, native_model = _model(predicted_complex), _model(native_complex)
+    if antigen_chains is not None:
+        if not antigen_chains:
+            raise EvaluationError("antibody evaluation requires at least one antigen chain")
+        declared = [
+            heavy_chain,
+            *([light_chain] if light_chain is not None else []),
+            *antigen_chains,
+        ]
+        if len(declared) != len(set(declared)):
+            raise EvaluationError("heavy, light, and antigen chain roles must not overlap")
+        for chain_id in antigen_chains:
+            _chain(predicted_model, chain_id)
+            _chain(native_model, chain_id)
     predicted_heavy = _chain(predicted_model, heavy_chain)
     native_heavy = _chain(native_model, heavy_chain)
     predicted_atoms = _atom_map(predicted_heavy)
@@ -406,7 +420,21 @@ def evaluate_antibody_h3(
     if not h3_residues:
         raise EvaluationError("no common IMGT H3 residues")
     h3_aar = float(np.mean([predicted_letters[key] == native_letters[key] for key in h3_residues]))
-    dockq = run_dockq(predicted_complex, native_complex, executable=dockq_executable)["total_dockq"]
+    dockq_mapping = None
+    if antigen_chains is not None:
+        ordered_chains = [
+            heavy_chain,
+            *([light_chain] if light_chain is not None else []),
+            *antigen_chains,
+        ]
+        identical_chain_mapping = "".join(ordered_chains)
+        dockq_mapping = f"{identical_chain_mapping}:{identical_chain_mapping}"
+    dockq = run_dockq(
+        predicted_complex,
+        native_complex,
+        executable=dockq_executable,
+        mapping=dockq_mapping,
+    )["total_dockq"]
     return AntibodyH3Result(h3_aar=h3_aar, h3_rmsd=h3_rmsd, dockq=dockq)
 
 
