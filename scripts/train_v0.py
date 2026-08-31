@@ -19,7 +19,7 @@ import torch.distributed as dist
 from torch.nn.parallel import DistributedDataParallel
 
 from nanodesign.v0.config import load_config, validate_v0_config
-from nanodesign.v0.data.cache import FeatureCacheError, FeatureCacheSpec
+from nanodesign.v0.data.cache import FeatureCacheError, FeatureCacheSpec, SQLiteFeatureCache
 from nanodesign.v0.data.loader import (
     CachedFeatureDataset,
     build_async_feature_loader,
@@ -141,55 +141,93 @@ def _validation(
     samples_per_task: int,
     seed: int,
     distributed: DistributedContext,
+    feature_cache_root: Path | None = None,
+    feature_cache_fallback: bool = True,
+    manifest_sha256: str | None = None,
 ) -> dict[str, dict[str, float]]:
+    if feature_cache_root is not None and manifest_sha256 is None:
+        raise ValueError("cached validation requires the frozen manifest SHA256")
+    cache = (
+        SQLiteFeatureCache(feature_cache_root, readonly=True, lru_size=samples_per_task)
+        if feature_cache_root is not None
+        else None
+    )
     report = {}
-    for task_index, (task, task_rows) in enumerate(rows.items()):
-        selected = random.Random(seed + 1000 + task_index).sample(
-            task_rows, min(samples_per_task, len(task_rows))
-        )
-        totals = defaultdict(float)
-        local_count = 0
-        for sample_index in validation_indices(
-            len(selected), rank=distributed.rank, world_size=distributed.world_size
-        ):
-            row = selected[sample_index]
-            validation_seed = seed + 10_000 * task_index + sample_index
-            torch.manual_seed(validation_seed)
-            if device.type == "cuda":
-                torch.cuda.manual_seed_all(validation_seed)
-            precision = (
-                torch.autocast(device_type="cuda", dtype=torch.bfloat16)
-                if device.type == "cuda"
-                else nullcontext()
+    try:
+        for task_index, (task, task_rows) in enumerate(rows.items()):
+            # Keep the frozen sample selection and rank sharding independent of the
+            # storage path.  A cache hit replaces only deterministic CIF parsing and
+            # feature construction; the same fixed validation seed freshly samples
+            # the noise_level=0.5 diffusion input on every invocation.
+            selected = random.Random(seed + 1000 + task_index).sample(
+                task_rows, min(samples_per_task, len(task_rows))
             )
-            with precision:
-                metrics = evaluate_loss(
-                    model,
-                    _batch(
+            totals = defaultdict(float)
+            local_count = 0
+            for sample_index in validation_indices(
+                len(selected), rank=distributed.rank, world_size=distributed.world_size
+            ):
+                row = selected[sample_index]
+                validation_seed = seed + 10_000 * task_index + sample_index
+                torch.manual_seed(validation_seed)
+                if device.type == "cuda":
+                    torch.cuda.manual_seed_all(validation_seed)
+                batch = None
+                if cache is not None:
+                    try:
+                        batch = recursive_to_device(
+                            cache.get(
+                                row,
+                                FeatureCacheSpec(
+                                    manifest_sha256=str(manifest_sha256),
+                                    max_context_tokens=max_context_tokens,
+                                    diffusion_batch_size=1,
+                                    noise_level=0.5,
+                                ),
+                            ),
+                            device,
+                            non_blocking=device.type == "cuda",
+                        )
+                    except FeatureCacheError:
+                        if not feature_cache_fallback:
+                            raise
+                if batch is None:
+                    batch = _batch(
                         root,
                         row,
                         device=device,
                         max_context_tokens=max_context_tokens,
                         noise_level=0.5,
-                    ),
+                    )
+                precision = (
+                    torch.autocast(device_type="cuda", dtype=torch.bfloat16)
+                    if device.type == "cuda"
+                    else nullcontext()
                 )
-            for name, value in metrics.items():
-                totals[name] += value
-            local_count += 1
-        names = ("loss", "coordinate_loss", "sequence_loss")
-        packed = torch.tensor(
-            [*(totals[name] for name in names), local_count],
-            dtype=torch.float64,
-            device=device,
-        )
-        if distributed.world_size > 1:
-            dist.all_reduce(packed, op=dist.ReduceOp.SUM)
-        count = int(packed[-1].item())
-        if count != len(selected):
-            raise RuntimeError("distributed validation did not cover every selected sample once")
-        report[task] = {
-            name: float(packed[index].item() / count) for index, name in enumerate(names)
-        }
+                with precision:
+                    metrics = evaluate_loss(model, batch)
+                for name, value in metrics.items():
+                    totals[name] += value
+                local_count += 1
+            names = ("loss", "coordinate_loss", "sequence_loss")
+            packed = torch.tensor(
+                [*(totals[name] for name in names), local_count],
+                dtype=torch.float64,
+                device=device,
+            )
+            if distributed.world_size > 1:
+                dist.all_reduce(packed, op=dist.ReduceOp.SUM)
+            count = int(packed[-1].item())
+            if count != len(selected):
+                raise RuntimeError(
+                    "distributed validation did not cover every selected sample once"
+                )
+            report[task] = {
+                name: float(packed[index].item() / count) for index, name in enumerate(names)
+            }
+    finally:
+        if cache is not None:
+            cache.close()
     return report
 
 
@@ -454,6 +492,9 @@ def main() -> None:
             samples_per_task=args.validation_samples_per_task,
             seed=args.seed,
             distributed=distributed,
+            feature_cache_root=args.feature_cache_root,
+            feature_cache_fallback=args.feature_cache_fallback,
+            manifest_sha256=manifest_sha,
         )
         _seed_process(args.seed, distributed.rank)
 
@@ -573,6 +614,9 @@ def main() -> None:
             samples_per_task=args.validation_samples_per_task,
             seed=args.seed,
             distributed=distributed,
+            feature_cache_root=args.feature_cache_root,
+            feature_cache_fallback=args.feature_cache_fallback,
+            manifest_sha256=manifest_sha,
         )
         restore_rng_state(local_rng)
         elapsed = elapsed_wall_seconds()
@@ -743,6 +787,9 @@ def main() -> None:
             samples_per_task=args.validation_samples_per_task,
             seed=args.seed,
             distributed=distributed,
+            feature_cache_root=args.feature_cache_root,
+            feature_cache_fallback=args.feature_cache_fallback,
+            manifest_sha256=manifest_sha,
         )
     generation = (
         _generation_outputs(
