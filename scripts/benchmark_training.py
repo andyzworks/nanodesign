@@ -370,6 +370,12 @@ def main() -> None:
     parser.add_argument("--data-repeats", type=int, default=3)
     parser.add_argument("--warmup", type=int, default=1)
     parser.add_argument("--seed", type=int, default=7)
+    parser.add_argument(
+        "--diffusion-batch-size",
+        type=int,
+        default=1,
+        help="number of diffusion realizations per complex (use 4 for the frozen v0 baseline)",
+    )
     parser.add_argument("--sample-task")
     parser.add_argument("--sample-id")
     parser.add_argument("--sample-catalog")
@@ -395,7 +401,7 @@ def main() -> None:
         )
         output_markdown.write_text(render_markdown(report), encoding="utf-8")
         return
-    if min(args.repeats, args.data_repeats) < 1 or args.warmup < 0:
+    if min(args.repeats, args.data_repeats, args.diffusion_batch_size) < 1 or args.warmup < 0:
         raise ValueError("repeat counts must be positive and warmup must be non-negative")
     sample_arguments = (args.sample_task, args.sample_id, args.sample_catalog)
     if any(sample_arguments) and not all(sample_arguments):
@@ -433,7 +439,7 @@ def main() -> None:
             row,
             repeats=args.data_repeats,
             max_context_tokens=int(resolved["model"]["max_context_tokens"]),
-            diffusion_batch_size=1,
+            diffusion_batch_size=args.diffusion_batch_size,
         )
         tokens = int(batch["f"]["restype"].shape[0])
         atoms = int(batch["ground_truth_positions"].shape[1])
@@ -470,7 +476,10 @@ def main() -> None:
             }
             model = optimizer = None
             try:
-                model = NanoDesignTiny(_model_config(resolved)).to(device)
+                # Benchmark the requested implementation explicitly.  In particular,
+                # ``standard`` must not silently use the wrapper's ``auto`` atom-count
+                # route for samples above the current threshold.
+                model = NanoDesignTiny(_model_config(resolved), execution_mode=mode).to(device)
                 optimizer = build_optimizer(model, TrainingConfig())
                 if args.warmup:
                     profile_training_stages(
@@ -518,7 +527,7 @@ def main() -> None:
         "data_repeats": args.data_repeats,
         "warmup_steps_per_sample": args.warmup,
         "max_context_tokens": int(resolved["model"]["max_context_tokens"]),
-        "diffusion_batch_size": 1,
+        "diffusion_batch_size": args.diffusion_batch_size,
         "precision": "bfloat16" if device.type == "cuda" else "float32",
         "device": str(device),
         "platform": platform.platform(),
