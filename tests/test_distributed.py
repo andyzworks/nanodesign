@@ -7,11 +7,16 @@ import torch.multiprocessing as mp
 from torch.nn.parallel import DistributedDataParallel
 
 from nanodesign.v0.distributed import (
+    PROTEIN_ATOM_SLOTS,
     DistributedContext,
     all_gather_objects,
+    catalog_model_atom_count,
+    catalog_model_token_count,
     reduce_scalar_metrics,
     row_for_rank,
     samples_seen,
+    size_aware_rank_packing,
+    synchronize_training_execution_mode,
     task_for_step,
     validation_indices,
 )
@@ -19,6 +24,72 @@ from nanodesign.v0.distributed import (
 
 def _rows(prefix: str, count: int):
     return [{"sample_id": f"{prefix}-{index}"} for index in range(count)]
+
+
+def _sized_row(sample_id: str, residues: int):
+    return {
+        "sample_id": sample_id,
+        "chains": [
+            {"role": "target", "resolved_residues": residues},
+            {"role": "binder", "resolved_residues": 10},
+        ],
+    }
+
+
+def test_catalog_size_matches_foundry_crop_and_size_packing_is_a_permutation():
+    antibody = {
+        "sample_id": "antibody",
+        "chains": [
+            {
+                "role": "antibody_framework+cdr_h3",
+                "resolved_residues": 120,
+                "design_residue_keys": [[index, ""] for index in range(12)],
+            },
+            {"role": "antibody_framework", "resolved_residues": 110},
+            {"role": "antigen", "resolved_residues": 800},
+        ],
+    }
+    assert catalog_model_token_count(antibody, max_context_tokens=384) == 396
+    assert catalog_model_atom_count(antibody, max_context_tokens=384) == 396 * PROTEIN_ATOM_SLOTS
+
+    rows = [
+        _sized_row(f"sample-{index}", residues) for index, residues in enumerate(range(8, 168, 10))
+    ]
+    packed = size_aware_rank_packing(rows, world_size=4, seed=7, max_context_tokens=384)
+    assert sorted(row["sample_id"] for row in packed) == sorted(row["sample_id"] for row in rows)
+    assert packed == size_aware_rank_packing(rows, world_size=4, seed=7, max_context_tokens=384)
+    scheduled = [
+        row_for_rank(
+            {"protein_binder": packed},
+            ["protein_binder"],
+            optimizer_step=step,
+            rank=rank,
+            world_size=4,
+        )["sample_id"]
+        for step in range(4)
+        for rank in range(4)
+    ]
+    assert len(scheduled) == len(set(scheduled)) == len(rows)
+    resumed_suffix = [
+        row_for_rank(
+            {"protein_binder": packed},
+            ["protein_binder"],
+            optimizer_step=step,
+            rank=rank,
+            world_size=4,
+        )["sample_id"]
+        for step in range(2, 4)
+        for rank in range(4)
+    ]
+    assert resumed_suffix == scheduled[8:]
+    spans = []
+    for start in range(0, len(packed), 4):
+        sizes = [
+            catalog_model_atom_count(row, max_context_tokens=384)
+            for row in packed[start : start + 4]
+        ]
+        spans.append(max(sizes) - min(sizes))
+    assert max(spans) == 30 * PROTEIN_ATOM_SLOTS
 
 
 def test_distributed_assignment_preserves_task_rotation_and_shards_samples():
@@ -113,3 +184,32 @@ def test_two_rank_gloo_ddp_reduces_metrics_and_uses_distinct_samples(tmp_path):
     assert rank1["sample_ids"] == rank0["sample_ids"]
     validation = rank0["validation_indices"] + rank1["validation_indices"]
     assert sorted(validation) == list(range(5))
+
+
+def _mixed_size_mode_worker(rank: int, rendezvous: str, output_dir: str) -> None:
+    world_size = 2
+    dist.init_process_group(
+        "gloo", init_method=f"file://{rendezvous}", rank=rank, world_size=world_size
+    )
+    mode = synchronize_training_execution_mode(
+        8008 if rank == 0 else 8009,
+        device=torch.device("cpu"),
+        world_size=world_size,
+        standard_max_atoms=8008,
+    )
+    Path(output_dir, f"mode-{rank}.txt").write_text(mode, encoding="utf-8")
+    dist.destroy_process_group()
+
+
+def test_mixed_size_ddp_ranks_use_one_chunked_execution_graph(tmp_path):
+    rendezvous = tmp_path / "mixed-size-init"
+    mp.spawn(
+        _mixed_size_mode_worker,
+        args=(str(rendezvous), str(tmp_path)),
+        nprocs=2,
+        join=True,
+    )
+    assert [Path(tmp_path, f"mode-{rank}.txt").read_text() for rank in range(2)] == [
+        "chunked",
+        "chunked",
+    ]

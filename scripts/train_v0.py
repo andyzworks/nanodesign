@@ -28,15 +28,18 @@ from nanodesign.v0.data.loader import (
 )
 from nanodesign.v0.data.real import load_foundry_training_example, load_split_catalog
 from nanodesign.v0.distributed import (
+    SIZE_PACKING_VERSION,
     DistributedContext,
     all_gather_objects,
     context_from_environment,
     reduce_scalar_metrics,
     row_for_rank,
+    size_aware_rank_packing,
+    synchronize_training_execution_mode,
     task_for_step,
     validation_indices,
 )
-from nanodesign.v0.model import NanoDesignTiny, NanoDesignTinyConfig
+from nanodesign.v0.model import STANDARD_MODE_MAX_ATOMS, NanoDesignTiny, NanoDesignTinyConfig
 from nanodesign.v0.training import (
     TrainingConfig,
     build_optimizer,
@@ -328,6 +331,7 @@ def main() -> None:
     _seed_process(args.seed, 0)
 
     base_model = NanoDesignTiny(_model_config(resolved)).to(device)
+    force_chunked_execution = base_model.execution_mode == "chunked"
     model = (
         DistributedDataParallel(
             base_model,
@@ -352,8 +356,12 @@ def main() -> None:
     test_rows = _load_rows(root, "test")
     shuffled = {}
     for task_index, (task, rows) in enumerate(train_rows.items()):
-        shuffled[task] = list(rows)
-        random.Random(args.seed + task_index).shuffle(shuffled[task])
+        shuffled[task] = size_aware_rank_packing(
+            rows,
+            world_size=distributed.world_size,
+            seed=args.seed + task_index,
+            max_context_tokens=max_context_tokens,
+        )
     task_names = list(SPLITS)
     cursors = defaultdict(int)
     history = []
@@ -374,6 +382,7 @@ def main() -> None:
         "global_batch_size_complexes": distributed.world_size,
         "milestone_samples": milestones,
         "feature_cache_enabled": args.feature_cache_root is not None,
+        "size_packing_version": SIZE_PACKING_VERSION,
     }
     if args.resume is not None:
         loaded = load_checkpoint(
@@ -593,6 +602,17 @@ def main() -> None:
                 max_context_tokens=max_context_tokens,
                 diffusion_batch_size=args.diffusion_batch_size,
             )
+        atom_map = batch.get("f", {}).get("atom_to_token_map")
+        if not isinstance(atom_map, torch.Tensor):
+            raise TypeError("batch.f.atom_to_token_map must be a tensor")
+        synchronized_mode = synchronize_training_execution_mode(
+            atom_map.numel(),
+            device=device,
+            world_size=distributed.world_size,
+            standard_max_atoms=STANDARD_MODE_MAX_ATOMS,
+            force_chunked=force_chunked_execution,
+        )
+        base_model.execution_mode = synchronized_mode
         if device.type == "cuda":
             with torch.autocast(device_type="cuda", dtype=torch.bfloat16):
                 metrics = train_step(model, optimizer, batch, training_config)
@@ -688,6 +708,12 @@ def main() -> None:
         "max_context_tokens": max_context_tokens,
         "task_steps": dict(task_steps),
         "execution_mode_counts_per_task": execution_mode_counts,
+        "size_aware_rank_packing": {
+            "version": SIZE_PACKING_VERSION,
+            "size_identity": "catalog row + max_context_tokens -> Foundry protein14/RNA23 atoms",
+            "global_group_size": distributed.world_size,
+            "synchronized_standard_max_atoms": STANDARD_MODE_MAX_ATOMS,
+        },
         "validation_samples_per_task": args.validation_samples_per_task,
         "generation_split": "test",
         "generation_selection": (

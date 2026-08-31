@@ -5,6 +5,7 @@ from pathlib import Path
 import pytest
 
 from nanodesign.v0.data.real import load_catalog_example, load_foundry_training_example
+from nanodesign.v0.distributed import catalog_model_atom_count
 
 EXPECTED = {
     "protein_binder": {"train": 40883, "validation": 5110, "test": 5110},
@@ -45,6 +46,24 @@ def test_each_binding_task_loads_real_coordinates_when_snapshot_is_present():
         example = load_catalog_example(root, row)
         assert example.atom_positions.shape[0] > 0, task
         assert example.design_mask.sum() > 0, task
+
+
+def test_catalog_size_identity_matches_real_model_ready_atoms_when_snapshot_is_present():
+    root = Path(__file__).resolve().parents[1]
+    paths = [
+        root / "data/processed/v0/splits/protein_binder/train.jsonl",
+        root / "data/processed/v0/splits/antibody_h3/train.jsonl",
+        root / "data/processed/v0/splits/rna_binding/train.jsonl",
+    ]
+    if not all(path.is_file() for path in paths):
+        pytest.skip("real data snapshot is not part of a source-only checkout")
+    for path in paths:
+        rows = [json.loads(line) for line in path.open(encoding="utf-8") if line.strip()]
+        row = min(rows, key=lambda value: sum(c["resolved_residues"] for c in value["chains"]))
+        batch = load_foundry_training_example(root, row, noise_level=0.5, max_context_tokens=384)
+        assert batch["f"]["atom_to_token_map"].numel() == catalog_model_atom_count(
+            row, max_context_tokens=384
+        )
 
 
 def test_rna_sources_have_frozen_non_overclaiming_semantics_when_snapshot_is_present():
