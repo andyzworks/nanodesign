@@ -63,13 +63,14 @@ def _batch(
     device: torch.device,
     max_context_tokens: int,
     noise_level: float | None = None,
+    diffusion_batch_size: int = 1,
 ) -> dict[str, Any]:
     return _to_device(
         load_foundry_training_example(
             root,
             row,
             noise_level=noise_level,
-            diffusion_batch_size=1,
+            diffusion_batch_size=diffusion_batch_size,
             max_context_tokens=max_context_tokens,
         ),
         device,
@@ -119,12 +120,18 @@ def main() -> None:
     parser.add_argument("--steps", type=int, required=True)
     parser.add_argument("--seed", type=int, default=7)
     parser.add_argument("--validation-samples-per-task", type=int, default=4)
+    parser.add_argument(
+        "--diffusion-batch-size",
+        type=int,
+        default=4,
+        help="EDM realizations per complex (official RFD3NA uses 32; v0 tiny uses 4)",
+    )
     parser.add_argument("--max-context-tokens", type=int)
     parser.add_argument("--device", default="cuda")
     parser.add_argument("--output-dir", required=True)
     args = parser.parse_args()
-    if args.steps < 1 or args.validation_samples_per_task < 1:
-        raise ValueError("steps and validation samples must be positive")
+    if min(args.steps, args.validation_samples_per_task, args.diffusion_batch_size) < 1:
+        raise ValueError("steps, validation samples, and diffusion batch size must be positive")
 
     root = Path(__file__).resolve().parents[1]
     resolved = load_config(root / args.config)
@@ -171,6 +178,7 @@ def main() -> None:
             row,
             device=device,
             max_context_tokens=max_context_tokens,
+            diffusion_batch_size=args.diffusion_batch_size,
         )
         if device.type == "cuda":
             with torch.autocast(device_type="cuda", dtype=torch.bfloat16):
@@ -247,7 +255,7 @@ def main() -> None:
         "steps": args.steps,
         "samples_seen": args.steps,
         "batch_size_complexes": 1,
-        "diffusion_realizations_per_complex": 1,
+        "diffusion_realizations_per_complex": args.diffusion_batch_size,
         "seed": args.seed,
         "device": str(device),
         "model_parameter_count": model.parameter_count,
