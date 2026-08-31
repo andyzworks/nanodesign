@@ -1,41 +1,182 @@
-# NanoDesign v0
+# NanoDesign
 
-NanoDesign v0 只做三件事：protein binder、antibody CDR-H3 和 RNA aptamer 的
-sequence + structure design。三个任务共用同一个模型，不增加 Agent、RSI、leaderboard
-或其他外围系统。
+## What is NanoDesign?
 
-## 当前完成结果
+**NanoDesign is a nano-scale testbed for unified biomolecular design. A single small
+model is trained to solve three design tasks: protein binder design, antibody CDR-H3
+design, and RNA binding/aptamer design.**
 
-| Task | Real Data Size（train / val / test） | Baseline | Real Evaluation |
-| --- | ---: | --- | --- |
-| Protein Binder | 40,883 / 5,110 / 5,110 | NanoDesign-Tiny | Success Rate + AF2/界面指标 |
-| Antibody H3 | 3,878 / 438 / 984 | 同一个模型 | H3 AAR + framework-aligned RMSD + DockQ |
-| RNA task | 2,117 / 83 / 88 | 同一个模型 | RhoFold+ scTM/scRMSD + RNA-target DockQ |
+Biomolecular design is often studied separately for proteins, antibodies, and RNA.
+NanoDesign provides a unified, compact setting that can be trained frequently from
+scratch. NanoDesign v0 fixes the tasks, data pools, baseline model, and evaluation
+protocols to establish a clear and reproducible reference baseline.
 
-另有 RNAsolo2 structure-prior auxiliary data：419 / 234 / 229。它不属于 aptamer
-binding ground truth，也不计入上表的 RNA Aptamer 数量。
+## Tasks
 
-这些是本仓库实际下载并通过结构过滤后的数量，不是 adapter 的理论数量。完整、带 SHA256
-的 split 清单见 [data_v0_stats.json](docs/data_v0_stats.json)，各来源的过滤和拒绝统计见
-[data_reports](docs/data_reports)。
+| Task | Input | Output |
+| --- | --- | --- |
+| Protein Binder Design | target protein | binder sequence + structure |
+| Antibody CDR-H3 Design | antigen + fixed antibody framework | CDR-H3 sequence + structure |
+| RNA Binding / Aptamer Design | target protein | RNA sequence + structure |
 
-## 真实数据
+All three tasks use the same formulation:
 
-- Protein Binder：PPIRef50K `ppiref_6A_filtered_clustered_04`，官方 51,755 个候选；
-  51,103 个可用。较长 resolved chain 固定为 target，另一条为 binder。
-- Antibody H3：SAbDab2 ML dataset 0.1.0，15,641 个官方结构；5,300 个 holo、
-  protein/peptide-antigen、完整 IMGT H3 样本可用。v0 只设计 H3。
-- RNA task pool 明确保留三种数据语义：Ribocentre 的 33 个 contact components 是
-  `true_aptamer`；RCSB PDB 的 2,255 个非重复实验结构是
-  `general_rna_protein_interaction`，不能称为已验证 aptamer；RNAsolo2 的 882 个代表结构是
-  `rna_structural_prior`。三者仍服务于同一个既定 RNA task，没有增加新 task。
+```text
+known molecular context → design sequence + structure
+```
 
-Split 不是随机逐样本切分：PPIRef 使用 MMseqs2 30% identity/80% coverage，并对 target
-和 binder 的 homology component 做 80/10/10；SAbDab2 保留官方 antigen-aware test，
-从官方 train cluster 中固定 10% 作 validation；RNA 同时按 target protein 30% 和 RNA 80%
-聚类，并把 RNAsolo2 纳入 leakage component 后再切分。
+## NanoDesign v0 at a Glance
 
-生成数据的命令：
+| Task | Data | Baseline Model | Evaluation |
+| --- | --- | --- | --- |
+| Protein Binder | PPIRef / PPIRef50K | NanoDesign-Tiny | In-silico Success Rate + frozen binder metrics |
+| Antibody H3 | SAbDab2 | same model | H3 AAR + H3 RMSD + DockQ |
+| RNA | Ribocentre + frozen PDB RNA–protein pool + RNAsolo2 structural prior | same model | scTM + scRMSD + RNA-target DockQ |
+
+The complete frozen v0 definition is in the [v0 specification](docs/V0_SPEC.md).
+
+## Data
+
+NanoDesign v0 uses release `nanodesign-v0-data-2026-08-30`. The counts below are
+samples that passed preprocessing and structural filtering, not source-dataset totals.
+
+| Pool | Train | Validation | Test | Total |
+| --- | ---: | ---: | ---: | ---: |
+| Protein Binder | 40,883 | 5,110 | 5,110 | 51,103 |
+| Antibody H3 | 3,878 | 438 | 984 | 5,300 |
+| RNA binding | 2,117 | 83 | 88 | 2,288 |
+| RNAsolo2 structural prior (auxiliary) | 419 | 234 | 229 | 882 |
+
+- **Protein Binder** uses the frozen PPIRef50K
+  `ppiref_6A_filtered_clustered_04` pool. The longer resolved chain is the target and
+  the other chain is the binder. Protein-homology components are split across
+  train/validation/test.
+- **Antibody H3** uses the SAbDab2 ML dataset 0.1.0. The antigen and antibody framework
+  are fixed; NanoDesign v0 designs CDR-H3 only. The split preserves the official
+  antigen-aware test partition.
+- **RNA binding** combines 33 Ribocentre `true_aptamer` examples with 2,255 experimental
+  PDB `general_rna_protein_interaction` examples. Ordinary PDB RNA–protein complexes are
+  not described as validated aptamers. The 882 RNAsolo2 structures are
+  `rna_structural_prior` auxiliary data and are not aptamer binding ground truth.
+
+Exact manifest SHA-256 values and split protocols are recorded in
+[frozen data statistics](docs/data_v0_stats.json). Source-specific filtering and
+rejection counts are available for [PPIRef](docs/data_reports/ppiref50k.json),
+[SAbDab2](docs/data_reports/sabdab2.json),
+[Ribocentre](docs/data_reports/ribocentre.json),
+[PDB RNA–protein](docs/data_reports/pdb_rna_target.json), and
+[RNAsolo2](docs/data_reports/rnasolo2.json).
+
+## Baseline Model
+
+**NanoDesign-Tiny** directly instantiates the pinned RosettaCommons Foundry
+`rfd3na.model.RFD3.RFD3` implementation at commit
+`aad357b776e3c0d6b973080f8f8c4bcf3ed21e40`. It is a reduced RFD3NA/RFD3 configuration,
+not a separately invented Cartesian Transformer.
+
+The current configuration has **6,849,538 parameters** (approximately 6.85M). The same
+architecture and input pipeline support Protein Binder, Antibody H3, and RNA design.
+Its purpose is to be a small, credible reference model that can be retrained often,
+not to maximize state-of-the-art performance. Model configuration is frozen in
+[`configs/v0.yaml`](configs/v0.yaml), and the three-task model smoke report is in
+[`docs/model_smoke.json`](docs/model_smoke.json).
+
+## Evaluation
+
+NanoDesign does not force the three tasks into one metric. Each task uses its frozen,
+domain-specific computational evaluation protocol.
+
+### Protein Binder
+
+The primary metric is **In-silico Success Rate**. Generated binders are independently
+predicted with ColabFold `alphafold2_multimer_v3`, then evaluated using the frozen
+BindCraft-style filters and Rosetta InterfaceAnalyzer. Reported auxiliary metrics are
+interface confidence, self-consistency RMSD, Rosetta interface ΔG, shape
+complementarity, clashes, diversity, and cluster-level success. Thresholds and the
+generation budget remain fixed by the v0 protocol.
+
+### Antibody H3
+
+- H3 AAR
+- framework-aligned H3 RMSD
+- DockQ
+
+The evaluator aligns the fixed antibody framework before computing H3 backbone RMSD;
+alignment is not delegated to the caller.
+
+### RNA
+
+- scTM
+- scRMSD
+- RNA-target DockQ
+
+RNA sequences are independently refolded with RhoFold+, compared with US-align, and
+the RNA–target interface is evaluated with DockQ.
+
+**Computational structural/interface metrics are not equivalent to experimentally
+measured binding affinity.** NanoDesign v0 does not claim experimental affinity or Kd.
+
+## Training Protocol and Budget
+
+The model architecture and data pools are fixed. Multi-task sampling uses the frozen
+Protein Binder : Antibody H3 : RNA ratio of `1 : 1 : 1`, and training budget is measured
+by global **samples seen**, not by epochs.
+
+The official NanoDesign v0 budget is still being calibrated. The current sweep saves
+checkpoints at 3K, 9K, 18K, and 36K samples seen to find the smallest budget at which
+all three tasks show clear learning signal while remaining inexpensive enough for rapid
+experimentation. Early milestones are learning-signal pilots, not final benchmark
+results; full generation and external evaluation are required before selecting a
+budget.
+
+## Current Status
+
+- [x] **Data pools and manifests:** frozen, cluster-disjoint, counted, and checksummed.
+- [x] **NanoDesign-Tiny:** implemented with the pinned RFD3 class; all three tasks have
+  passed forward, backward, generation, and checkpoint save/load smoke tests.
+- [x] **Evaluation components:** Binder, H3, and RNA end-to-end runners are implemented
+  and computationally smoke-tested. A complete formal benchmark has not been reported.
+- [x] **Learning-signal pilot:** held-out losses decreased for all three tasks in pilot
+  runs; this is not a formal scientific result.
+- [x] **Training performance:** feature caching, asynchronous loading, standard/chunked
+  execution, DDP, preflight checks, and checkpoint/resume are implemented and tested.
+- [ ] **Budget calibration:** the samples-seen sweep and milestone external evaluations
+  are in progress; no official v0 training budget or final result table is claimed yet.
+
+See the [training profiler](docs/training_profile_h100_batch4.md),
+[standard/chunked equivalence report](docs/training_mode_equivalence_h100.md), and
+[pilot record](docs/baseline_pilot.json) for the current evidence.
+
+## Quickstart
+
+### 1. Install
+
+NanoDesign requires Python `>=3.12,<3.13`. The RFD3NA dependency is installed from the
+pinned Foundry commit.
+
+```bash
+python3.12 -m venv .venv
+source .venv/bin/activate
+python -m pip install --upgrade pip
+python -m pip install -e '.[data,evaluation,model,dev]'
+```
+
+For the frozen H100 environment, install CUDA-enabled PyTorch 2.7.1 with CUDA 12.8 and
+verify CUDA before training:
+
+```bash
+python -m pip install --force-reinstall 'torch==2.7.1' \
+  --index-url https://download.pytorch.org/whl/cu128
+python -c "import torch; assert torch.cuda.is_available()"
+```
+
+ColabFold, Rosetta/PyRosetta, RhoFold+, US-align, and DockQ are external evaluation
+runtimes. Rosetta/PyRosetta must be installed under its applicable license.
+
+### 2. Prepare and split data
+
+Stage the source archives and structures under their default `data/raw/...` paths, then
+run the frozen converters and splitter:
 
 ```bash
 python scripts/prepare_v0_data.py --repo-root . ppiref --workers 8
@@ -48,67 +189,71 @@ python scripts/prepare_pdb_rna.py --repo-root . \
 python scripts/split_v0_data.py --repo-root .
 ```
 
-## 可信 baseline model
-
-`NanoDesignTiny` 直接实例化 RosettaCommons Foundry 的公开
-`rfd3na.model.RFD3.RFD3`，固定 commit
-`aad357b776e3c0d6b973080f8f8c4bcf3ed21e40`。仓库没有重新发明 Cartesian
-Transformer，也没有复制一套“类似 RFD3NA”的 geometry block。
-
-缩小的只有 channel、Pairformer/diffusion transformer block、atom attention depth、
-recycling 和 EDM sampling steps。默认模型实测为 **6,849,538 parameters**。它保留官方
-atom attention、token initializer、Pairformer、local diffusion transformer、atom decoder、
-EDM loss/sampler，以及 RFD3NA 对 3D geometry 的处理。
-
-训练输入使用官方 atom23 layout。未知设计序列使用 `UNK` protein scheme 或 `X` RNA
-scheme，只暴露 sequence-independent backbone/CB 或 phosphate-ribose slots；不会根据 native
-residue 提前创建 residue-specific side-chain/base atoms。完整复合物保留在 catalog，训练时
-围绕 design region 选最近的固定 context tokens。
-
-模型依赖要求 Python 3.12：
+Build integrity-checked model-ready feature caches for training and validation:
 
 ```bash
-python3.12 -m pip install -e '.[model,data]'
+python scripts/build_v0_feature_cache.py \
+  --catalog data/processed/v0/splits/protein_binder/train.jsonl \
+  --catalog data/processed/v0/splits/protein_binder/validation.jsonl \
+  --catalog data/processed/v0/splits/antibody_h3/train.jsonl \
+  --catalog data/processed/v0/splits/antibody_h3/validation.jsonl \
+  --catalog data/processed/v0/splits/rna_binding/train.jsonl \
+  --catalog data/processed/v0/splits/rna_binding/validation.jsonl \
+  --cache-root data/cache/v0 \
+  --manifest docs/data_v0_stats.json \
+  --max-context-tokens 384 \
+  --diffusion-batch-size 4 \
+  --report runs/cache-report.json
 ```
 
-GPU 训练环境必须另外安装 CUDA-enabled PyTorch；普通 PyPI 在无 CUDA 的安装节点上可能
-解析成 CPU-only wheel。本次冻结环境使用与 Foundry 兼容的 PyTorch 2.7.1 + CUDA 12.8：
+### 3. Test the three-task path
 
 ```bash
-python3.12 -m pip install --force-reinstall 'torch==2.7.1' \
-  --index-url https://download.pytorch.org/whl/cu128
-python3.12 -c "import torch; assert torch.backends.cuda.is_built()"
-```
-
-正式 Slurm 命令还会在训练前强制检查 `torch.cuda.is_available()`，避免 CPU wheel 静默占用
-GPU allocation。
-
-## 真实 evaluation
-
-- Binder：ColabFold `alphafold2_multimer_v3` 作独立结构验证；Rosetta
-  `InterfaceAnalyzer` 计算 ΔG、shape complementarity、dSASA 和界面 H-bond；success filters
-  固定自 BindCraft public defaults。预算固定为每 target 1,000 backbones × 2 sequences。
-- Antibody H3：代码强制先按 heavy-chain 非 H3 framework（加可用 light framework）Kabsch
-  对齐，再算 H3 backbone RMSD；AAR 与 DockQ v2 直接从结构运行，不允许 caller 改 alignment。
-- RNA：RhoFold+ 独立 refold，US-align RNA 计算 scTM/scRMSD，DockQ v2 计算 native
-  RNA–target interface。
-
-本地已实际运行 DockQ 2.1.3、US-align v20260527、RhoFold+、官方 quarterly PyRosetta
-InterfaceAnalyzer，以及官方 RFD3NA forward/backward/50-step EDM generation。ColabFold 使用
-集群的 1.5.5 module；代码不会在任何外部工具缺失时接受手填 metric 冒充真实结果。PyRosetta
-受 Rosetta non-commercial license 约束，不作为 CI 的自动下载依赖。
-
-第一次真实三任务 pilot（12 steps、D=4、seed 7）已完成，三个 task 的固定 validation
-coordinate/sequence/total loss 均下降，三条 generation 均写出有限 PDB；精确运行记录见
-[baseline_pilot.json](docs/baseline_pilot.json)。这只是训练链路和 learning-signal 验证，不冒充
-正式 baseline result。
-
-`scTM`、`scRMSD` 和 `DockQ` 是 computational structure/interface evaluation，**不等于
-真实 binding affinity**。NanoDesign v0 不声称得到实验 Kd。
-
-## 测试
-
-```bash
-python -m pip install -e '.[data,evaluation,dev]'
 pytest
+python scripts/smoke_rfd3na_real.py --sampling-steps 2
 ```
+
+The smoke test exercises forward, backward, generation, and checkpoint save/load for
+all three tasks using real processed samples.
+
+### 4. Train
+
+The current four-GPU calibration command is:
+
+```bash
+torchrun --standalone --nproc_per_node=4 scripts/train_v0.py \
+  --milestone-samples 3000,9000,18000,36000 \
+  --seed 7 \
+  --validation-samples-per-task 16 \
+  --diffusion-batch-size 4 \
+  --feature-cache-root data/cache/v0 \
+  --data-workers 4 \
+  --data-prefetch-factor 4 \
+  --output-dir runs/budget-sweep-seed7
+```
+
+These milestones are calibration checkpoints, not an already selected official budget.
+Use `--resume PATH` to resume the same run from a saved checkpoint.
+
+### 5. Generate and evaluate
+
+Generate one evaluator-ready sample per task from a saved milestone:
+
+```bash
+python scripts/generate_milestone.py \
+  --checkpoint runs/budget-sweep-seed7/milestones/samples-00003000.pt \
+  --samples-seen 3000 \
+  --device cuda \
+  --output-root runs/budget-sweep-seed7/generations
+```
+
+The task-specific evaluation entry points are:
+
+```text
+nanodesign-v0 evaluate-protein-binder --help
+python scripts/evaluate_antibody_h3.py --help
+python scripts/evaluate_rna.py --help
+```
+
+They consume generated structures and milestone metadata and invoke the frozen external
+evaluation tools; they do not accept manually supplied metrics as evaluation results.
