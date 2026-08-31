@@ -25,32 +25,62 @@
       "count": 5110,
       "sha256": "68bf89ff0feab2aaa2f6712aecc49f6b4ba04aa1f00c5b3fb2ef4c1e07c9bf01"
     },
-    "rna_aptamer_binding/test": {
+    "rna_binding/test": {
       "count": 88,
-      "sha256": "23d436e53fb2ceb8ac90fd788149ef2251a81f4cd441e29800b36547fc6054e1"
+      "sha256": "28e0ec93b0541ea082cc2db553fe30eb8a21ff3bc96e7c99f3b9e613cf90450a"
     },
-    "rna_aptamer_binding/train": {
+    "rna_binding/train": {
       "count": 2117,
-      "sha256": "65a3a901f8e57b1e653ab64de85e84c7c12674ebd5299540a07d0a8508876ac2"
+      "sha256": "d3a6117d8d35f42a0c73b04978a25c2004d4771170bdf8fcd205dce6eca2feed"
     },
-    "rna_aptamer_binding/validation": {
+    "rna_binding/validation": {
       "count": 83,
-      "sha256": "ab6e79458992ad081f46e014ce921aef08c0054ce4a5c9cfd1c9b0f54b186774"
+      "sha256": "0257a22f09b72d44b9a585d0f186d283c615a08a5467db245ab8df5247627d5c"
     },
     "rna_structure_prior_auxiliary/test": {
       "count": 229,
-      "sha256": "0073095fbb820d8c212f98d233f146e185cb27959055e8acc1ab0517443cfab3"
+      "sha256": "44e35f3a66bd78a18061f2ea7ab24ecc124a873b2720a8acc5a44061858cc0d4"
     },
     "rna_structure_prior_auxiliary/train": {
       "count": 419,
-      "sha256": "3960fed85dcb9359813b1cf4f06fded29675a4e2c27eb06ef672dab8cfda738b"
+      "sha256": "5a7c9a28964a20318741904f1c86928157229946b5180ca2195f3e4ba04761bd"
     },
     "rna_structure_prior_auxiliary/validation": {
       "count": 234,
-      "sha256": "3f81d4d32903935da34acc9dad2626e0a17653602f689b1b89faff7db195f77a"
+      "sha256": "cdff2edbc0556be4d6689e002156521ea03bee4f4d2af96b651355587881d6d9"
     }
   },
   "release": "nanodesign-v0-data-2026-08-30",
+  "reproducibility": {
+    "catalog_files": {
+      "pdb_rna_target.jsonl": {
+        "count": 2255,
+        "sha256": "f6c3bdec9a8eeca78994e4da8233a0738add6d03862d5046d7d18742691f433f"
+      },
+      "ppiref50k.jsonl": {
+        "count": 51103,
+        "sha256": "3e5850b29bcb5501ae8d9eb2fa8e6fada2182d9e159bf035e62607001b2bfd82"
+      },
+      "ribocentre.jsonl": {
+        "count": 33,
+        "sha256": "55b4c9f54f120e3bb4f059e6899c49824936f8113d78b3e82348dc15b61aa9f2"
+      },
+      "rnasolo2.jsonl": {
+        "count": 882,
+        "sha256": "427ba23312835ad9b1808c7766a3a2e611cd7de4f7b2bedc8dba7609cba70b06"
+      },
+      "sabdab2.jsonl": {
+        "count": 5300,
+        "sha256": "07aa80f04baf415f85a7c0e3a0051f06c53c9ff5cf79760a578e238bbf9a8569"
+      }
+    },
+    "fresh_output_supported": true
+  },
+  "rna_data_semantics": {
+    "general_rna_protein_interaction": 2255,
+    "rna_structural_prior": 882,
+    "true_aptamer": 33
+  },
   "split_counts": {
     "antibody_h3": {
       "test": 984,
@@ -62,7 +92,7 @@
       "train": 40883,
       "validation": 5110
     },
-    "rna_aptamer_binding": {
+    "rna_binding": {
       "test": 88,
       "train": 2117,
       "validation": 83

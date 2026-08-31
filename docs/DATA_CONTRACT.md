@@ -13,9 +13,13 @@
 | --- | --- | --- |
 | Protein binder | `target` | `binder` |
 | Antibody CDR | `antigen` + `antibody_framework` | `cdr` |
-| RNA aptamer | protein `target` | `rna_aptamer` |
+| RNA task | protein `target` | `rna_aptamer` (Ribocentre) or `rna_design_region` (general PDB RNA-protein) |
 
 RNAsolo2 样本使用 `rna_structure_prior` purpose，只含 RNA，不得伪造 target。
+
+`rna_aptamer` 是有 Ribocentre aptamer 注释的数据角色。普通实验解析的 PDB
+RNA-protein complex 使用 `rna_design_region`，不能视为 aptamer binding ground truth；两者仍属于
+同一个冻结的 RNA design task。`rna_structure_prior` 只表示 RNAsolo2 的结构先验。
 
 ## Manifest
 

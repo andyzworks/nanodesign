@@ -47,6 +47,14 @@ def load_jsonl(path: Path) -> list[dict[str, Any]]:
         return [json.loads(line) for line in handle if line.strip()]
 
 
+def file_sha256(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as handle:
+        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
 def write_jsonl(path: Path, rows: Iterable[dict[str, Any]]) -> tuple[int, str]:
     path.parent.mkdir(parents=True, exist_ok=True)
     temporary = path.with_suffix(path.suffix + ".tmp")
@@ -341,6 +349,21 @@ def _assert_disjoint(rows: list[dict[str, Any]], cluster_name: str) -> None:
             raise RuntimeError(f"{cluster_name}={cluster} crosses {previous}/{row['split']} splits")
 
 
+def _assert_rna_semantics(rows: list[dict[str, Any]]) -> None:
+    expected = {
+        "ribocentre_aptamer": "true_aptamer",
+        "pdb_rna_target_complex": "general_rna_protein_interaction",
+        "rnasolo2": "rna_structural_prior",
+    }
+    for row in rows:
+        source = row["source"]
+        if source not in expected or row.get("data_semantics") != expected[source]:
+            raise RuntimeError(
+                f"{row['sample_id']}: data_semantics must be {expected.get(source)!r} "
+                f"for source {source!r}"
+            )
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--repo-root", default=Path(__file__).resolve().parents[1])
@@ -360,6 +383,7 @@ def main() -> None:
     pdb_rna = load_jsonl(catalog_root / "pdb_rna_target.jsonl")
     rnasolo = load_jsonl(catalog_root / "rnasolo2.jsonl")
     rna_binding, rna_prior = split_rna(ribocentre + pdb_rna, rnasolo, output_root, mmseqs)
+    _assert_rna_semantics(rna_binding + rna_prior)
 
     all_rows = ppiref + sabdab + rna_binding + rna_prior
     for cluster_name in ("target", "design", "complex_component"):
@@ -370,7 +394,7 @@ def main() -> None:
     task_groups = {
         "protein_binder": ppiref,
         "antibody_h3": sabdab,
-        "rna_aptamer_binding": rna_binding,
+        "rna_binding": rna_binding,
         "rna_structure_prior_auxiliary": rna_prior,
     }
     manifest_hashes: dict[str, dict[str, Any]] = {}
@@ -382,7 +406,35 @@ def main() -> None:
 
     report = {
         "release": "nanodesign-v0-data-2026-08-30",
+        "reproducibility": {
+            "fresh_output_supported": True,
+            "catalog_files": {
+                name: {
+                    "count": sum(
+                        1 for line in (catalog_root / name).open(encoding="utf-8") if line.strip()
+                    ),
+                    "sha256": file_sha256(catalog_root / name),
+                }
+                for name in (
+                    "ppiref50k.jsonl",
+                    "sabdab2.jsonl",
+                    "ribocentre.jsonl",
+                    "pdb_rna_target.jsonl",
+                    "rnasolo2.jsonl",
+                )
+            },
+        },
         "split_counts": {task: _counts(rows) for task, rows in task_groups.items()},
+        "rna_data_semantics": {
+            semantics: sum(
+                row.get("data_semantics") == semantics for row in rna_binding + rna_prior
+            )
+            for semantics in (
+                "true_aptamer",
+                "general_rna_protein_interaction",
+                "rna_structural_prior",
+            )
+        },
         "total_samples": len(all_rows),
         "manifest_files": manifest_hashes,
         "split_protocols": {

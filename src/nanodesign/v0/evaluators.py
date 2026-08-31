@@ -11,6 +11,7 @@ import json
 import re
 import subprocess
 import tempfile
+from collections import defaultdict
 from collections.abc import Sequence
 from dataclasses import dataclass
 from pathlib import Path
@@ -56,6 +57,20 @@ class EvaluationError(RuntimeError):
     """Raised when a real evaluator fails or emits an unsupported result."""
 
 
+@dataclass(frozen=True)
+class ProteinBinderResult:
+    metrics: dict[str, float]
+    passed: bool
+
+
+@dataclass(frozen=True)
+class RnaEvaluationResult:
+    sctm: float
+    scrmsd: float
+    structure_confidence: float
+    dockq: float
+
+
 def binder_passes_frozen_filters(metrics: dict[str, float]) -> bool:
     """Apply the public BindCraft default filter without caller-supplied thresholds."""
 
@@ -77,6 +92,74 @@ def binder_success_rate(records: Sequence[dict[str, float]]) -> float:
     return float(np.mean([binder_passes_frozen_filters(record) for record in records]))
 
 
+def cluster_binder_sequences(
+    sequences: Sequence[str],
+    *,
+    executable: str | Path = "mmseqs",
+) -> list[str]:
+    """Assign generated binders to the frozen protein30/cov80 diversity clusters."""
+
+    if not sequences:
+        raise ValueError("binder diversity requires at least one sequence")
+    with tempfile.TemporaryDirectory(prefix="nanodesign-binder-clusters-") as directory:
+        root = Path(directory)
+        fasta = root / "binders.fasta"
+        fasta.write_text(
+            "".join(f">design_{index}\n{sequence}\n" for index, sequence in enumerate(sequences)),
+            encoding="utf-8",
+        )
+        prefix = root / "clusters"
+        _run(
+            [
+                str(executable),
+                "easy-cluster",
+                str(fasta),
+                str(prefix),
+                str(root / "tmp"),
+                "--min-seq-id",
+                "0.30",
+                "-c",
+                "0.80",
+                "--cov-mode",
+                "0",
+                "--cluster-mode",
+                "2",
+            ]
+        )
+        cluster_file = root / "clusters_cluster.tsv"
+        if not cluster_file.is_file():
+            raise EvaluationError("MMseqs2 did not produce binder cluster assignments")
+        assignments = {}
+        for line in cluster_file.read_text(encoding="utf-8").splitlines():
+            representative, member = line.split("\t")[:2]
+            assignments[member] = representative
+    missing = [
+        f"design_{index}" for index in range(len(sequences)) if f"design_{index}" not in assignments
+    ]
+    if missing:
+        raise EvaluationError(f"MMseqs2 omitted generated binders: {missing}")
+    return [assignments[f"design_{index}"] for index in range(len(sequences))]
+
+
+def aggregate_binder_results(
+    results: Sequence[ProteinBinderResult], cluster_ids: Sequence[str]
+) -> dict[str, float]:
+    """Compute success, diversity, and success-by-sequence-cluster for one target."""
+
+    if not results or len(results) != len(cluster_ids):
+        raise ValueError("binder results and cluster IDs must have the same non-zero length")
+    by_cluster: dict[str, list[bool]] = defaultdict(list)
+    for result, cluster_id in zip(results, cluster_ids, strict=True):
+        by_cluster[cluster_id].append(result.passed)
+    return {
+        "in_silico_success_rate": float(np.mean([result.passed for result in results])),
+        "diversity": len(by_cluster) / len(results),
+        "cluster_level_success": float(
+            np.mean([any(cluster_results) for cluster_results in by_cluster.values()])
+        ),
+    }
+
+
 def _run(command: Sequence[str], *, timeout: int = 3600) -> str:
     try:
         result = subprocess.run(
@@ -86,6 +169,13 @@ def _run(command: Sequence[str], *, timeout: int = 3600) -> str:
             text=True,
             timeout=timeout,
         )
+    except subprocess.CalledProcessError as error:
+        details = "\n".join(part for part in (error.stdout, error.stderr) if part)
+        if len(details) > 4000:
+            details = details[-4000:]
+        raise EvaluationError(
+            f"evaluator failed: {' '.join(map(str, command))}\n{details}"
+        ) from error
     except (OSError, subprocess.SubprocessError) as error:
         raise EvaluationError(f"evaluator failed: {' '.join(map(str, command))}") from error
     return result.stdout + result.stderr
@@ -161,6 +251,79 @@ def _atom_map(chain: gemmi.Chain) -> dict[tuple[int, str, str], np.ndarray]:
     return result
 
 
+def _ordered_backbone(model: gemmi.Model, chain_ids: Sequence[str]) -> np.ndarray:
+    coordinates = []
+    for chain_id in chain_ids:
+        for residue in _chain(model, chain_id):
+            info = gemmi.find_tabulated_residue(residue.name)
+            if not info.is_amino_acid():
+                continue
+            for atom_name in BACKBONE_ATOMS:
+                atom = residue.find_atom(atom_name, "*")
+                if atom is None:
+                    raise EvaluationError(
+                        f"chain {chain_id!r} residue {residue.seqid} lacks {atom_name}"
+                    )
+                coordinates.append([atom.pos.x, atom.pos.y, atom.pos.z])
+    if len(coordinates) < 3:
+        raise EvaluationError("fewer than three protein backbone atoms were resolved")
+    return np.asarray(coordinates, dtype=np.float64)
+
+
+def _protein_sequence(chain: gemmi.Chain) -> str:
+    letters = []
+    for residue in chain:
+        info = gemmi.find_tabulated_residue(residue.name)
+        if info.is_amino_acid() and info.one_letter_code not in {"", "X"}:
+            letters.append(info.one_letter_code)
+    if not letters:
+        raise EvaluationError(f"chain {chain.name!r} has no standard amino-acid sequence")
+    return "".join(letters)
+
+
+def target_aligned_binder_rmsd(
+    designed_complex: str | Path,
+    predicted_complex: str | Path,
+    *,
+    designed_target_chains: Sequence[str],
+    designed_binder_chain: str,
+    predicted_target_chains: Sequence[str],
+    predicted_binder_chain: str,
+) -> float:
+    """Align predicted target backbone to the design, then score binder backbone RMSD."""
+
+    designed, predicted = _model(designed_complex), _model(predicted_complex)
+    designed_target = _ordered_backbone(designed, designed_target_chains)
+    predicted_target = _ordered_backbone(predicted, predicted_target_chains)
+    designed_binder = _ordered_backbone(designed, [designed_binder_chain])
+    predicted_binder = _ordered_backbone(predicted, [predicted_binder_chain])
+    if designed_target.shape != predicted_target.shape:
+        raise EvaluationError("designed and predicted target backbones have different shapes")
+    if designed_binder.shape != predicted_binder.shape:
+        raise EvaluationError("designed and predicted binder backbones have different shapes")
+    rotation, translation = _kabsch(predicted_target, designed_target)
+    aligned_binder = predicted_binder @ rotation + translation
+    return float(np.sqrt(np.mean(np.sum((aligned_binder - designed_binder) ** 2, axis=1))))
+
+
+def aligned_binder_rmsd(
+    designed_complex: str | Path,
+    predicted_binder: str | Path,
+    *,
+    designed_binder_chain: str,
+    predicted_binder_chain: str,
+) -> float:
+    """Score binder conformation after optimal binder-backbone alignment."""
+
+    designed = _ordered_backbone(_model(designed_complex), [designed_binder_chain])
+    predicted = _ordered_backbone(_model(predicted_binder), [predicted_binder_chain])
+    if designed.shape != predicted.shape:
+        raise EvaluationError("designed and independently folded binder shapes differ")
+    rotation, translation = _kabsch(predicted, designed)
+    aligned = predicted @ rotation + translation
+    return float(np.sqrt(np.mean(np.sum((aligned - designed) ** 2, axis=1))))
+
+
 def _residue_letters(chain: gemmi.Chain) -> dict[tuple[int, str], str]:
     result = {}
     for residue in chain:
@@ -192,13 +355,28 @@ def evaluate_antibody_h3(
     native_heavy = _chain(native_model, heavy_chain)
     predicted_atoms = _atom_map(predicted_heavy)
     native_atoms = _atom_map(native_heavy)
-    common = sorted(set(predicted_atoms) & set(native_atoms))
-    framework_keys = [key for key in common if not H3_IMGT_START <= key[0] <= H3_IMGT_END]
-    h3_keys = [key for key in common if H3_IMGT_START <= key[0] <= H3_IMGT_END]
+    predicted_h3_keys = {key for key in predicted_atoms if H3_IMGT_START <= key[0] <= H3_IMGT_END}
+    native_h3_keys = {key for key in native_atoms if H3_IMGT_START <= key[0] <= H3_IMGT_END}
+    if predicted_h3_keys != native_h3_keys:
+        raise EvaluationError(
+            "predicted H3 backbone is not residue/atom-complete against reference"
+        )
+    predicted_framework_keys = {
+        key for key in predicted_atoms if not H3_IMGT_START <= key[0] <= H3_IMGT_END
+    }
+    native_framework_keys = {
+        key for key in native_atoms if not H3_IMGT_START <= key[0] <= H3_IMGT_END
+    }
+    if predicted_framework_keys != native_framework_keys:
+        raise EvaluationError("predicted heavy framework backbone differs from fixed reference")
+    framework_keys = sorted(native_framework_keys)
+    h3_keys = sorted(native_h3_keys)
     if light_chain is not None:
         predicted_light = _atom_map(_chain(predicted_model, light_chain))
         native_light = _atom_map(_chain(native_model, light_chain))
-        light_keys = sorted(set(predicted_light) & set(native_light))
+        if set(predicted_light) != set(native_light):
+            raise EvaluationError("predicted light framework backbone differs from fixed reference")
+        light_keys = sorted(native_light)
         predicted_framework = [predicted_atoms[key] for key in framework_keys] + [
             predicted_light[key] for key in light_keys
         ]
@@ -218,11 +396,13 @@ def evaluate_antibody_h3(
     )
     predicted_letters = _residue_letters(predicted_heavy)
     native_letters = _residue_letters(native_heavy)
-    h3_residues = sorted(
-        key
-        for key in set(predicted_letters) & set(native_letters)
-        if H3_IMGT_START <= key[0] <= H3_IMGT_END
-    )
+    predicted_h3_residues = {
+        key for key in predicted_letters if H3_IMGT_START <= key[0] <= H3_IMGT_END
+    }
+    native_h3_residues = {key for key in native_letters if H3_IMGT_START <= key[0] <= H3_IMGT_END}
+    if predicted_h3_residues != native_h3_residues:
+        raise EvaluationError("predicted H3 sequence positions differ from reference")
+    h3_residues = sorted(native_h3_residues)
     if not h3_residues:
         raise EvaluationError("no common IMGT H3 residues")
     h3_aar = float(np.mean([predicted_letters[key] == native_letters[key] for key in h3_residues]))
@@ -342,13 +522,14 @@ def run_rosetta_interface_analyzer(
     return {destination: float(row[source]) for destination, source in aliases.items()}
 
 
-def run_colabfold_multimer(
+def run_colabfold_prediction(
     fasta: str | Path,
     output_dir: str | Path,
     *,
     executable: str | Path = "colabfold_batch",
-) -> Path:
-    """Run the frozen AF2-multimer verifier used for protein binder evaluation."""
+    model_type: str = "alphafold2_multimer_v3",
+) -> tuple[Path, Path]:
+    """Run ColabFold and return the rank-1 structure and its native score JSON."""
 
     output_dir = Path(output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -356,7 +537,7 @@ def run_colabfold_multimer(
         [
             str(executable),
             "--model-type",
-            "alphafold2_multimer_v3",
+            model_type,
             "--num-models",
             "5",
             "--num-recycle",
@@ -369,7 +550,186 @@ def run_colabfold_multimer(
     ranked = sorted(output_dir.glob("*rank_001*.pdb"))
     if not ranked:
         raise EvaluationError("ColabFold did not produce a rank-001 complex")
-    return ranked[0]
+    score_files = sorted(output_dir.glob("*scores_rank_001*.json"))
+    if not score_files:
+        score_files = sorted(output_dir.glob("*rank_001*.json"))
+    if not score_files:
+        raise EvaluationError("ColabFold did not produce rank-001 score JSON")
+    return ranked[0], score_files[0]
+
+
+def run_colabfold_multimer(
+    fasta: str | Path,
+    output_dir: str | Path,
+    *,
+    executable: str | Path = "colabfold_batch",
+) -> Path:
+    """Compatibility wrapper returning the frozen AF2-multimer rank-1 structure."""
+
+    structure, _ = run_colabfold_prediction(fasta, output_dir, executable=executable)
+    return structure
+
+
+def parse_colabfold_scores(
+    score_json: str | Path,
+    *,
+    chain_lengths: Sequence[int],
+    binder_chain_index: int,
+) -> dict[str, float]:
+    """Parse ColabFold confidence without accepting caller-provided metric values."""
+
+    value = json.loads(Path(score_json).read_text(encoding="utf-8"))
+    plddt = np.asarray(value.get("plddt"), dtype=np.float64)
+    pae = np.asarray(value.get("pae"), dtype=np.float64)
+    total_length = sum(chain_lengths)
+    if plddt.shape != (total_length,) or pae.shape != (total_length, total_length):
+        raise EvaluationError("ColabFold score arrays do not match FASTA chain lengths")
+    if not 0 <= binder_chain_index < len(chain_lengths):
+        raise ValueError("binder_chain_index is outside the FASTA chain list")
+    offsets = np.cumsum([0, *chain_lengths])
+    binder = slice(offsets[binder_chain_index], offsets[binder_chain_index + 1])
+    target_ranges = [
+        np.arange(offsets[index], offsets[index + 1])
+        for index in range(len(chain_lengths))
+        if index != binder_chain_index
+    ]
+    if not target_ranges:
+        ptm = value.get("ptm")
+        if ptm is None:
+            raise EvaluationError("ColabFold monomer score JSON lacks pTM")
+        return {
+            "plddt": float(plddt.mean() / 100.0),
+            "binder_plddt": float(plddt.mean() / 100.0),
+            "ptm": float(ptm),
+            "iptm": float(ptm),
+            "ipae_normalized": 0.0,
+        }
+    target_indices = np.concatenate(target_ranges)
+    binder_indices = np.arange(binder.start, binder.stop)
+    cross_pae = np.concatenate(
+        (
+            pae[np.ix_(target_indices, binder_indices)].ravel(),
+            pae[np.ix_(binder_indices, target_indices)].ravel(),
+        )
+    )
+    ptm = value.get("ptm")
+    iptm = value.get("iptm", value.get("ipTM"))
+    if ptm is None or iptm is None or cross_pae.size == 0:
+        raise EvaluationError("ColabFold score JSON lacks pTM, ipTM, or interface PAE")
+    return {
+        "plddt": float(plddt.mean() / 100.0),
+        "binder_plddt": float(plddt[binder].mean() / 100.0),
+        "ptm": float(ptm),
+        "iptm": float(iptm),
+        "ipae_normalized": float(cross_pae.mean() / 31.0),
+    }
+
+
+def count_bindcraft_clashes(structure_path: str | Path, *, threshold: float = 2.4) -> int:
+    """Count inter-chain heavy-atom pairs below BindCraft's 2.4 A cutoff."""
+
+    model = _model(structure_path)
+    atoms: list[tuple[str, np.ndarray]] = []
+    for chain in model:
+        for residue in chain:
+            for atom in residue:
+                if atom.element.name == "H":
+                    continue
+                atoms.append(
+                    (
+                        chain.name,
+                        np.asarray([atom.pos.x, atom.pos.y, atom.pos.z], dtype=np.float64),
+                    )
+                )
+    clashes = 0
+    squared = threshold**2
+    for left in range(len(atoms)):
+        chain_left, position_left = atoms[left]
+        for chain_right, position_right in atoms[left + 1 :]:
+            if (
+                chain_left != chain_right
+                and np.sum((position_left - position_right) ** 2) < squared
+            ):
+                clashes += 1
+    return clashes
+
+
+def evaluate_protein_binder(
+    generated_complex: str | Path,
+    *,
+    target_chains: Sequence[str],
+    binder_chain: str,
+    output_dir: str | Path,
+    colabfold_executable: str | Path = "colabfold_batch",
+    rosetta_executable: str | Path = "InterfaceAnalyzer.linuxgccrelease",
+) -> ProteinBinderResult:
+    """Run the frozen NanoDesign v0 binder protocol from structure to pass/fail."""
+
+    if not target_chains or binder_chain in target_chains:
+        raise ValueError("target_chains must be non-empty and exclude the binder chain")
+    generated_model = _model(generated_complex)
+    chain_order = [*target_chains, binder_chain]
+    sequences = [_protein_sequence(_chain(generated_model, chain_id)) for chain_id in chain_order]
+    output_dir = Path(output_dir)
+    output_dir.mkdir(parents=True, exist_ok=True)
+    complex_fasta = output_dir / "complex.fasta"
+    complex_fasta.write_text(">nanodesign_complex\n" + ":".join(sequences) + "\n", encoding="utf-8")
+    binder_fasta = output_dir / "binder.fasta"
+    binder_fasta.write_text(">nanodesign_binder\n" + sequences[-1] + "\n", encoding="utf-8")
+    predicted_complex, complex_scores = run_colabfold_prediction(
+        complex_fasta,
+        output_dir / "complex_prediction",
+        executable=colabfold_executable,
+        model_type="alphafold2_multimer_v3",
+    )
+    predicted_binder, binder_scores = run_colabfold_prediction(
+        binder_fasta,
+        output_dir / "binder_prediction",
+        executable=colabfold_executable,
+        model_type="alphafold2_ptm",
+    )
+    predicted_chain_ids = [chr(ord("A") + index) for index in range(len(chain_order))]
+    confidence = parse_colabfold_scores(
+        complex_scores,
+        chain_lengths=[len(sequence) for sequence in sequences],
+        binder_chain_index=len(sequences) - 1,
+    )
+    binder_confidence = parse_colabfold_scores(
+        binder_scores,
+        chain_lengths=[len(sequences[-1])],
+        binder_chain_index=0,
+    )
+    self_consistency = target_aligned_binder_rmsd(
+        generated_complex,
+        predicted_complex,
+        designed_target_chains=target_chains,
+        designed_binder_chain=binder_chain,
+        predicted_target_chains=predicted_chain_ids[:-1],
+        predicted_binder_chain=predicted_chain_ids[-1],
+    )
+    binder_rmsd = aligned_binder_rmsd(
+        generated_complex,
+        predicted_binder,
+        designed_binder_chain=binder_chain,
+        predicted_binder_chain="A",
+    )
+    rosetta = run_rosetta_interface_analyzer(
+        predicted_complex,
+        target_chains="".join(predicted_chain_ids[:-1]),
+        binder_chains=predicted_chain_ids[-1],
+        executable=rosetta_executable,
+    )
+    metrics = {
+        **confidence,
+        **rosetta,
+        "binder_plddt": binder_confidence["plddt"],
+        "binder_rmsd": binder_rmsd,
+        "hotspot_rmsd": self_consistency,
+        "interface_confidence": confidence["iptm"],
+        "self_consistency_rmsd": self_consistency,
+        "clashes": float(count_bindcraft_clashes(predicted_complex)),
+    }
+    return ProteinBinderResult(metrics=metrics, passed=binder_passes_frozen_filters(metrics))
 
 
 def run_rhofold_plus(
@@ -378,23 +738,180 @@ def run_rhofold_plus(
     *,
     python_executable: str | Path,
     inference_script: str | Path,
+    checkpoint: str | Path | None = None,
+    device: str | None = None,
 ) -> Path:
     """Run RhoFold+ as the independent RNA sequence refolder."""
 
+    inference_script = Path(inference_script)
+    if not inference_script.is_file():
+        raise EvaluationError(f"RhoFold+ inference script does not exist: {inference_script}")
+    if checkpoint is not None and not Path(checkpoint).is_file():
+        raise EvaluationError(f"RhoFold+ checkpoint does not exist: {checkpoint}")
     output_dir = Path(output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
-    _run(
-        [
-            str(python_executable),
-            str(inference_script),
-            "--input_fas",
-            str(fasta),
-            "--output_dir",
-            str(output_dir),
-        ],
-        timeout=24 * 3600,
-    )
+    command = [
+        str(python_executable),
+        str(inference_script),
+        "--input_fas",
+        str(fasta),
+        "--output_dir",
+        str(output_dir),
+        "--single_seq_pred",
+        "True",
+        "--relax_steps",
+        "0",
+    ]
+    if checkpoint is not None:
+        command.extend(["--ckpt", str(checkpoint)])
+    if device is not None:
+        command.extend(["--device", device])
+    _run(command, timeout=24 * 3600)
     predictions = sorted(output_dir.rglob("*.pdb"))
     if not predictions:
         raise EvaluationError("RhoFold+ did not produce a PDB prediction")
     return predictions[0]
+
+
+def parse_rhofold_confidence(output_dir: str | Path, predicted_rna: str | Path) -> float:
+    """Read RhoFold's pLDDT output, preferring the native results.npz array."""
+
+    archives = sorted(Path(output_dir).rglob("results.npz"))
+    if archives:
+        with np.load(archives[0], allow_pickle=False) as value:
+            if "plddt" not in value:
+                raise EvaluationError("RhoFold+ results.npz lacks plddt")
+            confidence = float(np.asarray(value["plddt"], dtype=np.float64).mean())
+    else:
+        factors = [
+            atom.b_iso
+            for chain in _model(predicted_rna)
+            for residue in chain
+            for atom in residue
+            if atom.element.name != "H"
+        ]
+        if not factors:
+            raise EvaluationError("RhoFold+ output contains no confidence values")
+        confidence = float(np.mean(factors) / 100.0)
+    if confidence > 1.0:
+        confidence /= 100.0
+    if not 0.0 <= confidence <= 1.0:
+        raise EvaluationError(f"RhoFold+ confidence is outside [0,1]: {confidence}")
+    return confidence
+
+
+def _ordered_rna_alignment_atoms(model: gemmi.Model, chain_id: str) -> np.ndarray:
+    coordinates = []
+    for residue in _chain(model, chain_id):
+        residue_coordinates = []
+        # Terminal phosphates are often absent experimentally; C4'/C1' are the
+        # sequence-corresponding sugar-frame atoms present in the frozen filter.
+        for atom_name in ("C4'", "C1'"):
+            atom = residue.find_atom(atom_name, "*")
+            if atom is None:
+                raise EvaluationError(
+                    f"RNA chain {chain_id!r} residue {residue.seqid} lacks {atom_name}"
+                )
+            residue_coordinates.append([atom.pos.x, atom.pos.y, atom.pos.z])
+        coordinates.extend(residue_coordinates)
+    if len(coordinates) < 3:
+        raise EvaluationError("RNA alignment requires at least one complete residue")
+    return np.asarray(coordinates, dtype=np.float64)
+
+
+def _write_selected_chains(
+    source: str | Path, destination: str | Path, chain_ids: Sequence[str]
+) -> None:
+    structure = gemmi.read_structure(str(source)).clone()
+    keep = set(chain_ids)
+    for chain_name in [chain.name for chain in structure[0]]:
+        if chain_name not in keep:
+            structure[0].remove_chain(chain_name)
+    if {chain.name for chain in structure[0]} != keep:
+        raise EvaluationError(f"could not select every requested chain {sorted(keep)}")
+    structure.write_pdb(str(destination))
+
+
+def _build_rna_target_complex(
+    designed_complex: str | Path,
+    predicted_rna: str | Path,
+    destination: str | Path,
+    *,
+    target_chains: Sequence[str],
+    designed_rna_chain: str,
+) -> None:
+    designed_structure = gemmi.read_structure(str(designed_complex)).clone()
+    predicted_structure = gemmi.read_structure(str(predicted_rna)).clone()
+    if not predicted_structure or len(predicted_structure[0]) != 1:
+        raise EvaluationError("RhoFold+ prediction must contain exactly one RNA chain")
+    predicted_chain = predicted_structure[0][0]
+    designed_coordinates = _ordered_rna_alignment_atoms(designed_structure[0], designed_rna_chain)
+    predicted_coordinates = _ordered_rna_alignment_atoms(
+        predicted_structure[0], predicted_chain.name
+    )
+    if designed_coordinates.shape != predicted_coordinates.shape:
+        raise EvaluationError("RhoFold+ and designed RNA alignment atoms have different shapes")
+    rotation, translation = _kabsch(predicted_coordinates, designed_coordinates)
+    for residue in predicted_chain:
+        for atom in residue:
+            position = np.asarray([atom.pos.x, atom.pos.y, atom.pos.z]) @ rotation + translation
+            atom.pos = gemmi.Position(*position)
+    keep = set(target_chains)
+    for chain_name in [chain.name for chain in designed_structure[0]]:
+        if chain_name not in keep:
+            designed_structure[0].remove_chain(chain_name)
+    if {chain.name for chain in designed_structure[0]} != keep:
+        raise EvaluationError("designed complex is missing a requested target chain")
+    predicted_chain.name = designed_rna_chain
+    designed_structure[0].add_chain(predicted_chain.clone())
+    designed_structure.write_pdb(str(destination))
+
+
+def evaluate_rna(
+    generated_fasta: str | Path,
+    designed_complex: str | Path,
+    native_complex: str | Path,
+    *,
+    target_chains: Sequence[str],
+    rna_chain: str,
+    output_dir: str | Path,
+    rhofold_python: str | Path,
+    rhofold_inference_script: str | Path,
+    rhofold_checkpoint: str | Path,
+    usalign_executable: str | Path = "USalign",
+    dockq_executable: str | Path = "DockQ",
+    rhofold_device: str | None = None,
+) -> RnaEvaluationResult:
+    """Run RhoFold+ -> US-align -> target-complex DockQ without hand-filled metrics."""
+
+    if not target_chains or rna_chain in target_chains:
+        raise ValueError("target chains must be non-empty and exclude the RNA chain")
+    output_dir = Path(output_dir)
+    output_dir.mkdir(parents=True, exist_ok=True)
+    prediction_dir = output_dir / "rhofold_prediction"
+    predicted_rna = run_rhofold_plus(
+        generated_fasta,
+        prediction_dir,
+        python_executable=rhofold_python,
+        inference_script=rhofold_inference_script,
+        checkpoint=rhofold_checkpoint,
+        device=rhofold_device,
+    )
+    designed_rna = output_dir / "designed_rna.pdb"
+    _write_selected_chains(designed_complex, designed_rna, [rna_chain])
+    structural = run_usalign_rna(predicted_rna, designed_rna, executable=usalign_executable)
+    predicted_complex = output_dir / "predicted_rna_target_complex.pdb"
+    _build_rna_target_complex(
+        designed_complex,
+        predicted_rna,
+        predicted_complex,
+        target_chains=target_chains,
+        designed_rna_chain=rna_chain,
+    )
+    dockq = run_dockq(predicted_complex, native_complex, executable=dockq_executable)["total_dockq"]
+    return RnaEvaluationResult(
+        sctm=structural["sctm"],
+        scrmsd=structural["scrmsd"],
+        structure_confidence=parse_rhofold_confidence(prediction_dir, predicted_rna),
+        dockq=dockq,
+    )

@@ -19,7 +19,7 @@ def test_tasks_have_exact_real_primary_metrics():
     } == {"h3_aar", "h3_rmsd", "dockq"}
     assert {
         metric.name for metric in PROTOCOLS[Task.RNA_APTAMER].metrics if metric.tier == "primary"
-    } == {"sctm", "scrmsd", "dockq"}
+    } == {"sctm", "scrmsd", "structure_confidence", "dockq"}
 
 
 def test_binder_success_uses_frozen_bindcraft_defaults():

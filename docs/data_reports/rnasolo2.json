@@ -1,6 +1,7 @@
 {
   "binding_ground_truth": false,
-  "catalog_sha256": "bac7d95a2750e12dbf8a65f32fcd7760e61055c52cc8370781341b208a60fbb3",
+  "catalog_sha256": "427ba23312835ad9b1808c7766a3a2e611cd7de4f7b2bedc8dba7609cba70b06",
+  "data_semantics": "rna_structural_prior",
   "downloaded_representative_structures": 954,
   "exclusive_rejection_counts": {
     "no_resolved_rna_chain_length_at_least_8": 72

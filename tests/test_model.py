@@ -16,3 +16,8 @@ def test_default_model_is_official_rfd3na_and_inside_v0_parameter_range():
 def test_token_channel_must_satisfy_official_decoder_and_attention_divisibility():
     with pytest.raises(ValueError, match="divisible"):
         NanoDesignTinyConfig(c_token=256)
+
+
+def test_official_sampler_requires_at_least_two_steps():
+    with pytest.raises(ValueError, match="at least two"):
+        NanoDesignTinyConfig(sampling_steps=1)

@@ -1,34 +1,73 @@
 {
-  "foundry_commit": "aad357b776e3c0d6b973080f8f8c4bcf3ed21e40",
+  "checkpoint": {
+    "restored_generation_coordinates": [
+      1,
+      332,
+      3
+    ],
+    "save_load": "passed",
+    "step": 3
+  },
+  "foundry_model": "rfd3na.model.RFD3.RFD3",
   "parameter_count": 6849538,
   "sampling_steps": 2,
   "tasks": {
-    "protein_binder": {
-      "sample_id": "ppiref50k:1w7r_E_F",
-      "tokens": 8,
-      "atoms": 112,
-      "forward": true,
-      "backward": true,
-      "generated_coordinates": [1, 112, 3],
-      "generated_sequence_logits": [1, 8, 32]
-    },
     "antibody_h3": {
-      "sample_id": "sabdab2:pdb_00009hkq_F_+",
-      "tokens": 11,
-      "atoms": 154,
-      "forward": true,
-      "backward": true,
-      "generated_coordinates": [1, 154, 3],
-      "generated_sequence_logits": [1, 11, 32]
+      "atoms": 182,
+      "coordinate_loss": 5.116680145263672,
+      "generated_coordinates": [
+        1,
+        182,
+        3
+      ],
+      "generated_sequence_logits": [
+        1,
+        13,
+        32
+      ],
+      "gradient_norm": 17.331993103027344,
+      "loss": 5.3912811279296875,
+      "sample_id": "sabdab2:pdb_00009nk9_A_+",
+      "sequence_loss": 0.2746008336544037,
+      "tokens": 13
     },
-    "rna_aptamer": {
-      "sample_id": "pdb_rna_target:1hji:0",
-      "tokens": 19,
-      "atoms": 401,
-      "forward": true,
-      "backward": true,
-      "generated_coordinates": [1, 401, 3],
-      "generated_sequence_logits": [1, 19, 32]
+    "protein_binder": {
+      "atoms": 112,
+      "coordinate_loss": 4.979823589324951,
+      "generated_coordinates": [
+        1,
+        112,
+        3
+      ],
+      "generated_sequence_logits": [
+        1,
+        8,
+        32
+      ],
+      "gradient_norm": 25.080530166625977,
+      "loss": 5.155322551727295,
+      "sample_id": "ppiref50k:1w7r_E_F",
+      "sequence_loss": 0.17549918591976166,
+      "tokens": 8
+    },
+    "rna": {
+      "atoms": 332,
+      "coordinate_loss": 7.501981735229492,
+      "generated_coordinates": [
+        1,
+        332,
+        3
+      ],
+      "generated_sequence_logits": [
+        1,
+        16,
+        32
+      ],
+      "gradient_norm": 74.88471984863281,
+      "loss": 7.667916297912598,
+      "sample_id": "ribocentre:2rsk:0",
+      "sequence_loss": 0.16593478620052338,
+      "tokens": 16
     }
   }
 }

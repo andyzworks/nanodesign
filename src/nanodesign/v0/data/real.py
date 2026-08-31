@@ -121,13 +121,13 @@ def _role_for_token(chain: dict[str, Any], key: tuple[int, str]) -> Role:
     if role == "antibody_framework+cdr_h3":
         design_keys = {(int(item[0]), str(item[1])) for item in chain["design_residue_keys"]}
         return Role.CDR if key in design_keys else Role.ANTIBODY_FRAMEWORK
-    if role in {"rna_aptamer", "rna_structure_prior"}:
+    if role in {"rna_aptamer", "rna_design_region", "rna_structure_prior"}:
         return Role.RNA_APTAMER
     raise ValueError(f"unsupported concrete data role: {role!r}")
 
 
 def _polymer_for_chain(chain: dict[str, Any]) -> Polymer:
-    if chain["role"] in {"rna_aptamer", "rna_structure_prior"}:
+    if chain["role"] in {"rna_aptamer", "rna_design_region", "rna_structure_prior"}:
         return Polymer.RNA
     return Polymer.PROTEIN
 
@@ -291,6 +291,9 @@ def load_foundry_training_example(
     atom_is_real: list[bool] = []
     atom_is_central: list[bool] = []
     atom_is_backbone: list[bool] = []
+    token_chain_names: list[str] = []
+    token_residue_keys: list[tuple[int, str]] = []
+    output_atom_mask: list[bool] = []
 
     default_path = row["raw_paths"][0] if len(row["raw_paths"]) == 1 else None
     for numeric_chain_id, chain_record in enumerate(row["chains"], start=1):
@@ -334,6 +337,8 @@ def load_foundry_training_example(
             residue_indices.append(within_chain_index)
             asym_ids.append(numeric_chain_id)
             design_tokens.append(is_design)
+            token_chain_names.append(str(chain_record["chain_id"]))
+            token_residue_keys.append(key)
 
             observed = {
                 atom.name.strip(): np.asarray(
@@ -370,6 +375,7 @@ def load_foundry_training_example(
                     observed[clean_name] if is_real else observed[central_name].copy()
                 )
                 atom_is_real.append(is_real)
+                output_atom_mask.append((is_design and clean_name is not None) or is_real)
                 atom_is_central.append(clean_name == central_name)
                 atom_is_backbone.append(
                     clean_name
@@ -427,6 +433,8 @@ def load_foundry_training_example(
             protein_tokens = [protein_tokens[index] for index in selected]
             rna_tokens = [rna_tokens[index] for index in selected]
             polar_tokens = [polar_tokens[index] for index in selected]
+            token_chain_names = [token_chain_names[index] for index in selected]
+            token_residue_keys = [token_residue_keys[index] for index in selected]
             atom_selected = [index in remap for index in atom_to_token]
             atom_to_token = [
                 remap[token_index]
@@ -441,6 +449,9 @@ def load_foundry_training_example(
             ]
             atom_is_real = [
                 value for value, keep in zip(atom_is_real, atom_selected, strict=True) if keep
+            ]
+            output_atom_mask = [
+                value for value, keep in zip(output_atom_mask, atom_selected, strict=True) if keep
             ]
             atom_is_central = [
                 value for value, keep in zip(atom_is_central, atom_selected, strict=True) if keep
@@ -541,6 +552,16 @@ def load_foundry_training_example(
         "ground_truth_sequence": native_restype,
         "ground_truth_sequence_mask": token_design,
         "coord_atom_lvl_to_be_noised": positions.unsqueeze(0),
+        # Non-tensor provenance required to turn the official sampler output into a
+        # standards-compliant structure for the frozen evaluators.  RFD3 ignores
+        # unknown top-level keys; train/inference receive the same feature tensors.
+        "output_metadata": {
+            "atom_names": atom_names,
+            "atom_to_token": atom_to_token,
+            "atom_output_mask": output_atom_mask,
+            "token_chain_names": token_chain_names,
+            "token_residue_keys": token_residue_keys,
+        },
     }
 
 

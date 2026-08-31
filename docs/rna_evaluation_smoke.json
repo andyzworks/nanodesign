@@ -1,0 +1,13 @@
+{
+  "sample_id": "ribocentre:2rsk:0",
+  "sequence": "GGAGGAGGAGGA",
+  "rhofold_commit": "6bdfbda720184409eb682ce08c05d258162ddc48",
+  "rhofold_checkpoint_sha256": "3adb621978dfcd7ea0dc0edeb520d249f423d61530df85ff58a1fad2f33e5608",
+  "usalign_version": "20260527",
+  "dockq_version": "2.1.3",
+  "sctm": 0.0508,
+  "scrmsd": 6.59,
+  "structure_confidence": 0.8121010065078735,
+  "dockq": 0.37684773771957775,
+  "note": "Computational structure/interface evaluation; not binding affinity."
+}

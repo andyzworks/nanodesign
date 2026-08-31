@@ -10,7 +10,7 @@ sequence + structure design。三个任务共用同一个模型，不增加 Agen
 | --- | ---: | --- | --- |
 | Protein Binder | 40,883 / 5,110 / 5,110 | NanoDesign-Tiny | Success Rate + AF2/界面指标 |
 | Antibody H3 | 3,878 / 438 / 984 | 同一个模型 | H3 AAR + framework-aligned RMSD + DockQ |
-| RNA Aptamer | 2,117 / 83 / 88 | 同一个模型 | RhoFold+ scTM/scRMSD + RNA-target DockQ |
+| RNA task | 2,117 / 83 / 88 | 同一个模型 | RhoFold+ scTM/scRMSD + RNA-target DockQ |
 
 另有 RNAsolo2 structure-prior auxiliary data：419 / 234 / 229。它不属于 aptamer
 binding ground truth，也不计入上表的 RNA Aptamer 数量。
@@ -25,9 +25,10 @@ binding ground truth，也不计入上表的 RNA Aptamer 数量。
   51,103 个可用。较长 resolved chain 固定为 target，另一条为 binder。
 - Antibody H3：SAbDab2 ML dataset 0.1.0，15,641 个官方结构；5,300 个 holo、
   protein/peptide-antigen、完整 IMGT H3 样本可用。v0 只设计 H3。
-- RNA Aptamer binding：Ribocentre 33 个 RNA–protein contact components，加 RCSB PDB
-  2,255 个非重复实验 RNA–protein contact components，共 2,288 个样本。
-- RNA prior：RNAsolo2 882 个可用代表结构，单独存放。
+- RNA task pool 明确保留三种数据语义：Ribocentre 的 33 个 contact components 是
+  `true_aptamer`；RCSB PDB 的 2,255 个非重复实验结构是
+  `general_rna_protein_interaction`，不能称为已验证 aptamer；RNAsolo2 的 882 个代表结构是
+  `rna_structural_prior`。三者仍服务于同一个既定 RNA task，没有增加新 task。
 
 Split 不是随机逐样本切分：PPIRef 使用 MMseqs2 30% identity/80% coverage，并对 target
 和 binder 的 homology component 做 80/10/10；SAbDab2 保留官方 antigen-aware test，
@@ -42,7 +43,8 @@ python scripts/prepare_v0_data.py --repo-root . sabdab2 --workers 8
 python scripts/prepare_v0_data.py --repo-root . ribocentre \
   --structures-json data/raw/ribocentre/structures_merged.json --workers 8
 python scripts/prepare_v0_data.py --repo-root . rnasolo2 --workers 8
-python scripts/prepare_pdb_rna.py --repo-root . --workers 8
+python scripts/prepare_pdb_rna.py --repo-root . \
+  --ribocentre-ids data/raw/ribocentre/protein_target_pdb_ids.txt --download-workers 8
 python scripts/split_v0_data.py --repo-root .
 ```
 

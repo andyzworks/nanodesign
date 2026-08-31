@@ -362,7 +362,7 @@ def prepare(args: argparse.Namespace) -> None:
                 chains.append(record)
                 component_paths.append(raw_paths[chain.chain_id])
             for chain in rnas:
-                record = _record_chain(chain, "rna_aptamer")
+                record = _record_chain(chain, "rna_design_region")
                 record["raw_path"] = raw_paths[chain.chain_id]
                 chains.append(record)
                 component_paths.append(raw_paths[chain.chain_id])
@@ -373,6 +373,9 @@ def prepare(args: argparse.Namespace) -> None:
                     "source": "pdb_rna_target_complex",
                     "source_version": SOURCE_VERSION,
                     "purpose": "binding_design",
+                    # These are experimentally resolved RNA-protein interfaces, but
+                    # PDB deposition alone is not evidence that the RNA is an aptamer.
+                    "data_semantics": "general_rna_protein_interaction",
                     "raw_paths": sorted(set(component_paths)),
                     "pdb_id": pdb_id,
                     "chains": chains,
@@ -406,6 +409,7 @@ def prepare(args: argparse.Namespace) -> None:
             "eligible_before_coordinate_contacts": len(eligible),
             "usable_pdb_entries": usable_entries,
             "usable_contact_components": count,
+            "data_semantics": "general_rna_protein_interaction",
             "exclusive_rejection_counts_by_entry": dict(sorted(rejected.items())),
             "catalog_sha256": digest,
             "filtering": [

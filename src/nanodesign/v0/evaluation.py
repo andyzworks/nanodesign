@@ -11,8 +11,11 @@ from nanodesign.v0.constants import Task
 from nanodesign.v0.evaluators import (
     BINDCRAFT_DEFAULT_FILTERS,
     BINDER_GENERATION_BUDGET,
+    aggregate_binder_results,
     binder_success_rate,
     evaluate_antibody_h3,
+    evaluate_protein_binder,
+    evaluate_rna,
     framework_aligned_h3_rmsd,
     run_dockq,
     run_rosetta_interface_analyzer,
@@ -69,6 +72,7 @@ PROTOCOLS = {
         (
             MetricSpec("sctm", MetricDirection.HIGHER, "primary"),
             MetricSpec("scrmsd", MetricDirection.LOWER, "primary"),
+            MetricSpec("structure_confidence", MetricDirection.HIGHER, "primary"),
             MetricSpec(
                 "dockq",
                 MetricDirection.HIGHER,
@@ -99,9 +103,12 @@ __all__ = [
     "BINDCRAFT_DEFAULT_FILTERS",
     "BINDER_GENERATION_BUDGET",
     "PROTOCOLS",
+    "aggregate_binder_results",
     "amino_acid_recovery",
     "binder_success_rate",
     "evaluate_antibody_h3",
+    "evaluate_protein_binder",
+    "evaluate_rna",
     "framework_aligned_h3_rmsd",
     "get_protocol",
     "run_dockq",

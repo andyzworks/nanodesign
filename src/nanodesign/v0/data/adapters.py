@@ -52,7 +52,7 @@ ADAPTERS = {
         DataSource.PDB_RNA_TARGET_COMPLEX,
         Task.RNA_APTAMER,
         ExamplePurpose.BINDING_DESIGN,
-        ("target_protein", "rna_aptamer", *_BINDING_CLUSTERS),
+        ("target_protein", "rna_design_region", *_BINDING_CLUSTERS),
     ),
     DataSource.RNASOLO2: AdapterDefinition(
         DataSource.RNASOLO2,

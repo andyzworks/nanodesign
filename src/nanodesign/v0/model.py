@@ -40,6 +40,8 @@ class NanoDesignTinyConfig:
     def __post_init__(self) -> None:
         if min(self.__dict__.values()) < 1:
             raise ValueError("all NanoDesign-Tiny dimensions and block counts must be positive")
+        if self.sampling_steps < 2:
+            raise ValueError("official RFD3NA EDM generation requires at least two sampling steps")
         if self.c_s % 4 or self.c_z % 4 or self.c_atom % 4 or self.c_token % 24:
             raise ValueError("channels must be divisible by unchanged RFD3NA head counts")
 

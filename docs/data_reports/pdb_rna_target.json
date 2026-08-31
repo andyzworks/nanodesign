@@ -1,6 +1,7 @@
 {
   "candidate_pdb_entries": 7955,
-  "catalog_sha256": "45c6a13cf92461b6efbe4cdc73310c526dc052493c56814c7422f59d54964829",
+  "catalog_sha256": "f6c3bdec9a8eeca78994e4da8233a0738add6d03862d5046d7d18742691f433f",
+  "data_semantics": "general_rna_protein_interaction",
   "eligible_before_coordinate_contacts": 2139,
   "exclusive_rejection_counts_by_entry": {
     "assembly_above_2_rna_or_4_protein_chains": 3537,

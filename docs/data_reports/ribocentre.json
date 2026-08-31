@@ -1,7 +1,8 @@
 {
   "candidate_pdb_entries": 34,
-  "catalog_sha256": "9dcfb41bb62b70c69f078874bc3e0e81c97b8435109ee893389d9b44021694ef",
+  "catalog_sha256": "55b4c9f54f120e3bb4f059e6899c49824936f8113d78b3e82348dc15b61aa9f2",
   "curated_protein_target_groups": 21,
+  "data_semantics": "true_aptamer",
   "exclusive_rejection_counts_by_pdb": {
     "no_supported_rna_protein_contact_component": 10
   },
