@@ -197,6 +197,7 @@ path=pathlib.Path(sys.argv[sys.argv.index('--json')+1]); path.write_text(json.du
             {
                 "generation": {
                     "rna": {
+                        "sample_id": "rna-test:example",
                         "structure_path": str(designed),
                         "sequences": {"B": "AAA"},
                     }
@@ -205,18 +206,40 @@ path=pathlib.Path(sys.argv[sys.argv.index('--json')+1]); path.write_text(json.du
         ),
         encoding="utf-8",
     )
+    catalog = tmp_path / "test.jsonl"
+    catalog.write_text(
+        json.dumps(
+            {
+                "sample_id": "rna-test:example",
+                "chains": [
+                    {
+                        "chain_id": "A",
+                        "role": "target",
+                        "raw_path": designed.name,
+                        "residue_keys": [[1, ""], [2, ""], [3, ""]],
+                    },
+                    {
+                        "chain_id": "B",
+                        "role": "rna_design_region",
+                        "raw_path": designed.name,
+                        "residue_keys": [[1, ""], [2, ""], [3, ""]],
+                    },
+                ],
+            }
+        )
+        + "\n",
+        encoding="utf-8",
+    )
     subprocess.run(
         [
             sys.executable,
             str(root / "scripts/evaluate_rna.py"),
             "--training-report",
             str(training_report),
-            "--native-complex",
-            str(designed),
-            "--target-chain",
-            "A",
-            "--rna-chain",
-            "B",
+            "--catalog",
+            str(catalog),
+            "--repo-root",
+            str(tmp_path),
             "--output-dir",
             str(output_dir),
             "--result-json",
