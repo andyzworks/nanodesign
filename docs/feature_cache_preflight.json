@@ -1,0 +1,15 @@
+{
+  "benchmark_sample_id": "sabdab2:pdb_000010zo_A_+",
+  "benchmark_speedup": 13.072562707435514,
+  "cache_format": "sqlite-task-split-v1",
+  "cached_read_seconds": 0.39721470326185226,
+  "exact_tensor_match": true,
+  "manifest_sha256": "6a194c2558c323c9f3f394a4df4ba9856c10a92f42c1ddb5e53ade03cc1cd584",
+  "max_context_tokens": 384,
+  "multiworker_node_local_reads": 40,
+  "multiworker_node_local_reads_per_second": 3.841555576996379,
+  "multiworker_processes": 4,
+  "node_local_staging_verified": true,
+  "preprocessing_seconds": 5.192614116705954,
+  "random_seed_base": 7
+}
