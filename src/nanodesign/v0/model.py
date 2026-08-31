@@ -242,6 +242,28 @@ class NanoDesignTiny(nn.Module):
 
         if self.training and n_cycle is None:
             n_cycle = self.config.recycle_steps
+        if self.training and self.net.token_initializer.use_chunked_pll:
+            # Foundry's sampler already wires the official chunked pair embedder into
+            # the diffusion module, but RFD3.forward's training branch does not. Keep
+            # the architecture untouched and mirror that published sampler call here.
+            features = dict(batch)["f"]
+            initializer_outputs = self.net.token_initializer(features)
+            chunked_embedder = initializer_outputs["chunked_pairwise_embedder"]
+            other_outputs = {
+                key: value
+                for key, value in initializer_outputs.items()
+                if key != "chunked_pairwise_embedder"
+            }
+            return self.net.diffusion_module(
+                X_noisy_L=dict(batch)["X_noisy_L"],
+                t=dict(batch)["t"],
+                f=features,
+                n_recycle=n_cycle,
+                P_LL=None,
+                chunked_pairwise_embedder=chunked_embedder,
+                initializer_outputs=other_outputs,
+                **other_outputs,
+            )
         return self.net(
             input=dict(batch),
             coord_atom_lvl_to_be_noised=coord_atom_lvl_to_be_noised,
