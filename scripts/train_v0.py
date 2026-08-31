@@ -340,8 +340,11 @@ def main() -> None:
             # Every frozen RFD3NA-Tiny parameter participates in both official
             # execution paths.  Foundry also activation-checkpoints its blocks;
             # enabling DDP's unused-parameter graph traversal can deadlock on the
-            # second reentrant backward even though no parameter is unused.
+            # second reentrant backward even though no parameter is unused.  Declaring
+            # the unchanged RFD3 parameter graph static is PyTorch's supported DDP
+            # path for reentrant activation checkpointing.
             find_unused_parameters=False,
+            static_graph=True,
         )
         if distributed.world_size > 1
         else base_model

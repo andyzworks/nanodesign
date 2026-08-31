@@ -150,8 +150,11 @@ def _two_rank_gloo_worker(rank: int, rendezvous: str, output_dir: str) -> None:
     local_loss = ddp(torch.tensor([[float(rank + 1)]])).square().mean()
     local_loss.backward()
     optimizer.step()
+    local_metrics = {"loss": float(local_loss)}
+    if rank == 1:
+        local_metrics["mask_dependent_aux"] = 3.0
     reduced = reduce_scalar_metrics(
-        {"loss": float(local_loss)}, device=torch.device("cpu"), world_size=world_size
+        local_metrics, device=torch.device("cpu"), world_size=world_size
     )
     sample_ids = all_gather_objects(row["sample_id"], world_size)
     torch.save(
@@ -159,6 +162,7 @@ def _two_rank_gloo_worker(rank: int, rendezvous: str, output_dir: str) -> None:
             "weight": model.weight.detach(),
             "local_loss": float(local_loss),
             "loss": reduced["loss"],
+            "mask_dependent_aux": reduced["mask_dependent_aux"],
             "sample_ids": sample_ids,
             "validation_indices": list(validation_indices(5, rank=rank, world_size=world_size)),
         },
@@ -180,6 +184,7 @@ def test_two_rank_gloo_ddp_reduces_metrics_and_uses_distinct_samples(tmp_path):
     assert torch.equal(rank0["weight"], rank1["weight"])
     assert rank0["loss"] == pytest.approx(rank1["loss"])
     assert rank0["loss"] == pytest.approx((rank0["local_loss"] + rank1["local_loss"]) / 2)
+    assert rank0["mask_dependent_aux"] == rank1["mask_dependent_aux"] == 3.0
     assert rank0["sample_ids"] == ["protein_binder-0", "protein_binder-1"]
     assert rank1["sample_ids"] == rank0["sample_ids"]
     validation = rank0["validation_indices"] + rank1["validation_indices"]

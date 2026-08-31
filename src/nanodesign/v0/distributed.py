@@ -263,11 +263,26 @@ def reduce_scalar_metrics(
         return {key: float(value) for key, value in metrics.items()}
     if not dist.is_initialized():
         raise RuntimeError("distributed metrics require an initialized process group")
-    names = sorted(metrics)
-    values = torch.tensor([metrics[name] for name in names], dtype=torch.float64, device=device)
+    # RFD3's auxiliary loss metrics are mask-dependent: a rank can legitimately omit
+    # a scalar that another sample reports.  Reducing each rank's local key list would
+    # issue different tensor shapes to the same NCCL collective and deadlock.  Agree on
+    # the union first, then average every metric over only the ranks that reported it.
+    key_sets: list[tuple[str, ...] | None] = [None] * world_size
+    dist.all_gather_object(key_sets, tuple(sorted(metrics)))
+    names = sorted({name for keys in key_sets if keys is not None for name in keys})
+    values = torch.tensor(
+        [*(float(metrics.get(name, 0.0)) for name in names), *(name in metrics for name in names)],
+        dtype=torch.float64,
+        device=device,
+    )
     dist.all_reduce(values, op=dist.ReduceOp.SUM)
-    values /= world_size
-    return {name: float(value) for name, value in zip(names, values.cpu().tolist(), strict=True)}
+    sums, counts = values[: len(names)], values[len(names) :]
+    if bool((counts == 0).any()):
+        raise RuntimeError("distributed metric union contains an unreported key")
+    return {
+        name: float(value)
+        for name, value in zip(names, (sums / counts).cpu().tolist(), strict=True)
+    }
 
 
 def all_gather_objects(value: Any, world_size: int) -> list[Any]:
