@@ -190,14 +190,26 @@ path=pathlib.Path(sys.argv[sys.argv.index('--json')+1]); path.write_text(json.du
     root = Path(__file__).resolve().parents[1]
     output_dir = tmp_path / "rna_evaluation"
     result_json = tmp_path / "result.json"
+    training_report = tmp_path / "training_report.json"
+    training_report.write_text(
+        json.dumps(
+            {
+                "generation": {
+                    "rna": {
+                        "structure_path": str(designed),
+                        "sequences": {"B": "AAA"},
+                    }
+                }
+            }
+        ),
+        encoding="utf-8",
+    )
     subprocess.run(
         [
             sys.executable,
             str(root / "scripts/evaluate_rna.py"),
-            "--generated-fasta",
-            str(fasta),
-            "--generated-complex",
-            str(designed),
+            "--training-report",
+            str(training_report),
             "--native-complex",
             str(designed),
             "--target-chain",

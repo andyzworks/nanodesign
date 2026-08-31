@@ -42,12 +42,28 @@ def _read_single_fasta(path: Path) -> str:
     return _rna_sequence(records[0])
 
 
+def _from_training_report(path: Path, rna_chain: str) -> tuple[str, Path]:
+    report = json.loads(path.read_text(encoding="utf-8"))
+    generation = report.get("generation", {}).get("rna")
+    if not isinstance(generation, dict):
+        raise TypeError("training report has no RNA generation")
+    structure_path = generation.get("structure_path")
+    sequences = generation.get("sequences")
+    if not isinstance(structure_path, str) or not isinstance(sequences, dict):
+        raise TypeError("training report RNA generation lacks structure_path/sequences")
+    sequence = sequences.get(rna_chain)
+    if not isinstance(sequence, str):
+        raise TypeError(f"training report has no sequence for RNA chain {rna_chain!r}")
+    return _rna_sequence(sequence), Path(structure_path)
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=__doc__)
     sequence = parser.add_mutually_exclusive_group(required=True)
     sequence.add_argument("--generated-sequence", type=_rna_sequence)
     sequence.add_argument("--generated-fasta", type=Path)
-    parser.add_argument("--generated-complex", type=Path, required=True)
+    sequence.add_argument("--training-report", type=Path)
+    parser.add_argument("--generated-complex", type=Path)
     parser.add_argument("--native-complex", type=Path, required=True)
     parser.add_argument("--rna-chain", required=True)
     parser.add_argument(
@@ -70,17 +86,25 @@ def build_parser() -> argparse.ArgumentParser:
 
 def main() -> None:
     args = build_parser().parse_args()
-    sequence = (
-        args.generated_sequence
-        if args.generated_sequence is not None
-        else _read_single_fasta(args.generated_fasta)
-    )
+    if args.training_report is not None:
+        if args.generated_complex is not None:
+            raise ValueError("--training-report cannot be combined with --generated-complex")
+        sequence, generated_complex = _from_training_report(args.training_report, args.rna_chain)
+    else:
+        if args.generated_complex is None:
+            raise ValueError("--generated-complex is required without --training-report")
+        generated_complex = args.generated_complex
+        sequence = (
+            args.generated_sequence
+            if args.generated_sequence is not None
+            else _read_single_fasta(args.generated_fasta)
+        )
     args.output_dir.mkdir(parents=True, exist_ok=True)
     generated_fasta = args.output_dir / "generated_rna.fasta"
     generated_fasta.write_text(f">generated_rna\n{sequence}\n", encoding="utf-8")
     result = evaluate_rna(
         generated_fasta,
-        args.generated_complex,
+        generated_complex,
         args.native_complex,
         target_chains=args.target_chains,
         rna_chain=args.rna_chain,
