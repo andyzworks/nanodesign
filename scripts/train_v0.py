@@ -594,6 +594,10 @@ def main() -> None:
         )
 
     recorded_milestones = {record["global_samples_seen"] for record in milestone_records}
+    if start_step == 0 and milestones:
+        # Preserve the exact random-initialization reference used by this sweep so
+        # milestone metrics can demonstrate learning rather than only lower loss.
+        save_training_checkpoint(output_dir / "milestones" / "samples-00000000.pt", 0)
     if samples_seen in milestones and samples_seen not in recorded_milestones:
         append_milestone_record(start_step)
         save_training_checkpoint(

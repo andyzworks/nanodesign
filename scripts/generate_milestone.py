@@ -190,8 +190,8 @@ def build_parser() -> argparse.ArgumentParser:
 
 def main() -> None:
     args = build_parser().parse_args()
-    if args.samples_seen <= 0:
-        raise ValueError("samples-seen milestone must be positive")
+    if args.samples_seen < 0:
+        raise ValueError("samples-seen milestone must be non-negative")
     run(args)
 
 
