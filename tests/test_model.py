@@ -5,7 +5,7 @@ import torch
 
 pytest.importorskip("rfd3na")
 
-from nanodesign.v0.model import NanoDesignTiny, NanoDesignTinyConfig
+from nanodesign.v0.model import STANDARD_MODE_MAX_ATOMS, NanoDesignTiny, NanoDesignTinyConfig
 from nanodesign.v0.spec import MAX_MODEL_PARAMETERS, MIN_MODEL_PARAMETERS
 
 
@@ -30,6 +30,8 @@ def test_low_memory_training_wires_official_chunked_initializer_outputs():
     model = NanoDesignTiny.__new__(NanoDesignTiny)
     torch.nn.Module.__init__(model)
     model.config = NanoDesignTinyConfig()
+    model.execution_mode = "chunked"
+    model.last_execution_mode = None
     model.net = MagicMock()
     model.net.token_initializer.use_chunked_pll = True
     chunked_embedder = object()
@@ -51,6 +53,7 @@ def test_low_memory_training_wires_official_chunked_initializer_outputs():
     result = model(batch)
 
     assert result["X_L"].shape == (1, 2, 3)
+    assert model.last_execution_mode == "chunked"
     model.net.diffusion_module.assert_called_once_with(
         X_noisy_L=batch["X_noisy_L"],
         t=batch["t"],
@@ -64,3 +67,30 @@ def test_low_memory_training_wires_official_chunked_initializer_outputs():
         S_I="s",
         Z_II="z",
     )
+
+
+def test_auto_execution_mode_uses_profiled_atom_threshold():
+    model = NanoDesignTiny.__new__(NanoDesignTiny)
+    torch.nn.Module.__init__(model)
+    model.execution_mode = "auto"
+    standard = {"f": {"atom_to_token_map": torch.zeros(STANDARD_MODE_MAX_ATOMS)}}
+    chunked = {"f": {"atom_to_token_map": torch.zeros(STANDARD_MODE_MAX_ATOMS + 1)}}
+
+    assert model.execution_mode_for(standard) == "standard"
+    assert model.execution_mode_for(chunked) == "chunked"
+
+
+def test_explicit_execution_mode_overrides_atom_threshold():
+    model = NanoDesignTiny.__new__(NanoDesignTiny)
+    torch.nn.Module.__init__(model)
+    batch = {"f": {"atom_to_token_map": torch.zeros(STANDARD_MODE_MAX_ATOMS + 1)}}
+    model.execution_mode = "standard"
+    assert model.execution_mode_for(batch) == "standard"
+    model.execution_mode = "chunked"
+    assert model.execution_mode_for(batch) == "chunked"
+
+
+def test_low_memory_environment_preserves_benchmark_override(monkeypatch):
+    monkeypatch.setenv("RFD3_LOW_MEMORY_MODE", "1")
+    model = NanoDesignTiny()
+    assert model.execution_mode == "chunked"

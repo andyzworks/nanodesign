@@ -7,9 +7,10 @@ block counts, neighbourhood size, recycling, and EDM sampling steps.
 
 from __future__ import annotations
 
+import os
 from collections.abc import Mapping
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, Literal
 
 import torch
 from torch import nn
@@ -18,6 +19,11 @@ from nanodesign.v0.spec import MAX_MODEL_PARAMETERS, MIN_MODEL_PARAMETERS
 
 FOUNDRY_COMMIT = "aad357b776e3c0d6b973080f8f8c4bcf3ed21e40"
 ATOM_ASSOCIATION_SCHEME = "atom23"
+# H100 bf16 profiling at the frozen v0 configuration measured 62.67 GB reserved
+# at 8,008 atoms, 81.28 GB at 8,904 atoms, and OOM at 10,038 atoms.  This keeps
+# at least ~20% headroom on an 80 GB H100; see docs/training_profile_h100.json.
+STANDARD_MODE_MAX_ATOMS = 8008
+ExecutionMode = Literal["auto", "standard", "chunked"]
 
 
 @dataclass(frozen=True)
@@ -204,8 +210,17 @@ def _official_arguments(config: NanoDesignTinyConfig) -> dict[str, Any]:
 class NanoDesignTiny(nn.Module):
     """Thin, provenance-pinned wrapper around the public RFD3NA model."""
 
-    def __init__(self, config: NanoDesignTinyConfig | Mapping[str, object] | None = None):
+    def __init__(
+        self,
+        config: NanoDesignTinyConfig | Mapping[str, object] | None = None,
+        *,
+        execution_mode: ExecutionMode | None = None,
+    ):
         super().__init__()
+        if execution_mode is None:
+            execution_mode = "chunked" if os.environ.get("RFD3_LOW_MEMORY_MODE") == "1" else "auto"
+        if execution_mode not in {"auto", "standard", "chunked"}:
+            raise ValueError("execution_mode must be auto, standard, or chunked")
         if config is None:
             config = NanoDesignTinyConfig()
         elif isinstance(config, Mapping):
@@ -218,7 +233,21 @@ class NanoDesignTiny(nn.Module):
                 "NanoDesign-Tiny requires Python >=3.12 and the project 'model' extra "
                 f"pinned to Foundry commit {FOUNDRY_COMMIT}"
             ) from error
-        self.net = RFD3(**_official_arguments(config))
+        # Foundry creates its parameter-free sparse pair embedder only when this
+        # variable is set during construction.  Always construct that official path
+        # so one set of weights can select either mathematically equivalent execution
+        # path per batch; restore the caller's environment immediately afterwards.
+        previous_low_memory = os.environ.get("RFD3_LOW_MEMORY_MODE")
+        os.environ["RFD3_LOW_MEMORY_MODE"] = "1"
+        try:
+            self.net = RFD3(**_official_arguments(config))
+        finally:
+            if previous_low_memory is None:
+                os.environ.pop("RFD3_LOW_MEMORY_MODE", None)
+            else:
+                os.environ["RFD3_LOW_MEMORY_MODE"] = previous_low_memory
+        self.execution_mode = execution_mode
+        self.last_execution_mode: Literal["standard", "chunked"] | None = None
 
     @property
     def parameter_count(self) -> int:
@@ -231,6 +260,35 @@ class NanoDesignTiny(nn.Module):
                 f"{MIN_MODEL_PARAMETERS:,}-{MAX_MODEL_PARAMETERS:,}"
             )
 
+    def execution_mode_for(self, batch: Mapping[str, Any]) -> Literal["standard", "chunked"]:
+        """Choose the profiled H100-safe implementation without changing model math."""
+
+        if self.execution_mode != "auto":
+            return self.execution_mode
+        features = batch.get("f")
+        if not isinstance(features, Mapping):
+            raise TypeError("batch.f must be an RFD3NA feature mapping")
+        atom_map = features.get("atom_to_token_map")
+        if not isinstance(atom_map, torch.Tensor):
+            raise TypeError("batch.f.atom_to_token_map must be a tensor")
+        return "standard" if atom_map.numel() <= STANDARD_MODE_MAX_ATOMS else "chunked"
+
+    def _set_official_execution_mode(self, mode: Literal["standard", "chunked"]) -> None:
+        """Keep one mode active through activation-checkpoint recomputation.
+
+        Foundry recomputes checkpointed forward blocks during ``loss.backward()``.
+        Restoring the previous mode when ``forward`` returns would therefore make the
+        recomputation graph differ.  Training is serialized within each DDP process,
+        so the next batch safely replaces this process-local state on its next forward.
+        """
+
+        chunked = mode == "chunked"
+        self.net.token_initializer.use_chunked_pll = chunked
+        if chunked:
+            os.environ["RFD3_LOW_MEMORY_MODE"] = "1"
+        else:
+            os.environ.pop("RFD3_LOW_MEMORY_MODE", None)
+
     def forward(
         self,
         batch: Mapping[str, Any],
@@ -240,9 +298,12 @@ class NanoDesignTiny(nn.Module):
     ) -> dict[str, torch.Tensor]:
         """Run the official denoise step (train) or EDM rollout (evaluation)."""
 
+        mode = self.execution_mode_for(batch)
+        self.last_execution_mode = mode
+        self._set_official_execution_mode(mode)
         if self.training and n_cycle is None:
             n_cycle = self.config.recycle_steps
-        if self.training and self.net.token_initializer.use_chunked_pll:
+        if self.training and mode == "chunked":
             # Foundry's sampler already wires the official chunked pair embedder into
             # the diffusion module, but RFD3.forward's training branch does not. Keep
             # the architecture untouched and mirror that published sampler call here.
