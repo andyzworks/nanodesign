@@ -287,6 +287,12 @@ def main() -> None:
     parser.add_argument(
         "--feature-cache-fallback", action=argparse.BooleanOptionalAction, default=True
     )
+    parser.add_argument(
+        "--final-generation",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="run the unchanged three-task generation after training; disable for throughput runs",
+    )
     args = parser.parse_args()
     if min(args.validation_samples_per_task, args.diffusion_batch_size) < 1:
         raise ValueError("validation samples and diffusion batch size must be positive")
@@ -587,9 +593,25 @@ def main() -> None:
                     )
                     for task_name in task_names
                 },
+                "train_metrics_per_task": {
+                    task_name: {
+                        metric_name: float(
+                            np.mean(
+                                [
+                                    record[metric_name]
+                                    for record in history
+                                    if record["task"] == task_name
+                                ]
+                            )
+                        )
+                        for metric_name in ("loss", "coordinate_loss", "sequence_loss")
+                    }
+                    for task_name in task_names
+                },
                 "validation_loss_per_task": {
                     task_name: milestone_validation[task_name]["loss"] for task_name in task_names
                 },
+                "validation_metrics_per_task": milestone_validation,
             }
         )
 
@@ -685,16 +707,23 @@ def main() -> None:
     checkpoint_path = output_dir / "checkpoint.pt"
     save_training_checkpoint(checkpoint_path, total_steps)
 
-    validation_after = _validation(
-        base_model,
-        root,
-        validation_rows,
-        device=device,
-        max_context_tokens=max_context_tokens,
-        samples_per_task=args.validation_samples_per_task,
-        seed=args.seed,
-        distributed=distributed,
-    )
+    final_milestone = milestone_records[-1] if milestone_records else {}
+    if (
+        final_milestone.get("global_samples_seen") == samples_seen
+        and "validation_metrics_per_task" in final_milestone
+    ):
+        validation_after = final_milestone["validation_metrics_per_task"]
+    else:
+        validation_after = _validation(
+            base_model,
+            root,
+            validation_rows,
+            device=device,
+            max_context_tokens=max_context_tokens,
+            samples_per_task=args.validation_samples_per_task,
+            seed=args.seed,
+            distributed=distributed,
+        )
     generation = (
         _generation_outputs(
             base_model,
@@ -704,7 +733,7 @@ def main() -> None:
             max_context_tokens=max_context_tokens,
             output_dir=output_dir,
         )
-        if distributed.is_primary
+        if distributed.is_primary and args.final_generation
         else {}
     )
     if not distributed.is_primary:
@@ -740,6 +769,7 @@ def main() -> None:
         },
         "validation_samples_per_task": args.validation_samples_per_task,
         "generation_split": "test",
+        "final_generation_enabled": args.final_generation,
         "generation_selection": (
             "first sample with complete fixed context; first-sample fallback for low-budget smoke"
         ),
