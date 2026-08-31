@@ -56,6 +56,25 @@ def _load_rows(root: Path, split: str) -> dict[str, list[dict[str, Any]]]:
     }
 
 
+def _first_fully_represented_row(
+    rows: list[dict[str, Any]], *, max_context_tokens: int
+) -> dict[str, Any]:
+    """Select the first held-out sample whose complete fixed context fits the config."""
+
+    for row in rows:
+        design_tokens = 0
+        for chain in row["chains"]:
+            if chain["role"] in {"binder", "rna_aptamer", "rna_design_region"}:
+                design_tokens += int(chain["resolved_residues"])
+            elif chain["role"] == "antibody_framework+cdr_h3":
+                design_tokens += len(chain["design_residue_keys"])
+        fixed_tokens = sum(int(chain["resolved_residues"]) for chain in row["chains"])
+        fixed_tokens -= design_tokens
+        if fixed_tokens <= max_context_tokens:
+            return row
+    raise ValueError("no held-out sample has a fully representable fixed context")
+
+
 def _batch(
     root: Path,
     row: dict[str, Any],
@@ -149,7 +168,9 @@ def main() -> None:
     model = NanoDesignTiny(_model_config(resolved)).to(device)
     training_config = TrainingConfig()
     optimizer = build_optimizer(model, training_config)
-    train_rows, validation_rows = _load_rows(root, "train"), _load_rows(root, "validation")
+    train_rows = _load_rows(root, "train")
+    validation_rows = _load_rows(root, "validation")
+    test_rows = _load_rows(root, "test")
     shuffled = {}
     for task_index, (task, rows) in enumerate(train_rows.items()):
         shuffled[task] = list(rows)
@@ -205,8 +226,8 @@ def main() -> None:
     output_dir = Path(args.output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
     generation = {}
-    for task, rows in validation_rows.items():
-        row = rows[0]
+    for task, rows in test_rows.items():
+        row = _first_fully_represented_row(rows, max_context_tokens=max_context_tokens)
         generation_batch = _batch(
             root,
             row,
@@ -262,6 +283,8 @@ def main() -> None:
         "max_context_tokens": max_context_tokens,
         "task_steps": dict(task_steps),
         "validation_samples_per_task": args.validation_samples_per_task,
+        "generation_split": "test",
+        "generation_selection": "first sample with complete fixed context within token budget",
         "validation_before": validation_before,
         "validation_after": validation_after,
         "generation": generation,
