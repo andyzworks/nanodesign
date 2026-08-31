@@ -324,7 +324,14 @@ class SQLiteFeatureCache:
         self._connections[path] = connection
         return connection
 
-    def put(self, row: dict[str, Any], spec: FeatureCacheSpec, batch: dict[str, Any]) -> Path:
+    def put(
+        self,
+        row: dict[str, Any],
+        spec: FeatureCacheSpec,
+        batch: dict[str, Any],
+        *,
+        commit: bool = True,
+    ) -> Path:
         if self.readonly:
             raise FeatureCacheError("cannot write through a read-only feature cache")
         identity = _identity(row, spec)
@@ -343,9 +350,18 @@ class SQLiteFeatureCache:
                 len(payload),
             ),
         )
-        self._connection(path).commit()
+        if commit:
+            self._connection(path).commit()
         self._lru.clear()
         return path
+
+    def commit(self) -> None:
+        """Commit pending writer transactions for bounded, resumable bulk builds."""
+
+        if self.readonly:
+            raise FeatureCacheError("cannot commit through a read-only feature cache")
+        for connection in self._connections.values():
+            connection.commit()
 
     def contains_valid(self, row: dict[str, Any], spec: FeatureCacheSpec) -> bool:
         """Return whether a resumable writer already contains this exact intact row."""

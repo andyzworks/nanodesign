@@ -103,18 +103,21 @@ def main() -> None:
                 if cache.contains_valid(row, specs[row["sample_id"]]):
                     timings["resumed_rows"] += 1
                     if index % 100 == 0 or index == len(rows):
+                        cache.commit()
                         print(f"cached {index}/{len(rows)} (resumed)", flush=True)
                     continue
                 started = time.perf_counter()
                 batch = preprocess_feature_batch(root, row, specs[row["sample_id"]])
                 timings["preprocessing_seconds"] += time.perf_counter() - started
                 started = time.perf_counter()
-                cache.put(row, specs[row["sample_id"]], batch)
+                cache.put(row, specs[row["sample_id"]], batch, commit=False)
                 timings["write_seconds"] += time.perf_counter() - started
                 if index <= args.benchmark_samples:
                     built_batches[row["sample_id"]] = batch
                 if index % 100 == 0 or index == len(rows):
+                    cache.commit()
                     print(f"cached {index}/{len(rows)}", flush=True)
+            cache.commit()
 
     databases = sorted({(row["task"], row["split"]) for row in rows})
     if not args.preflight_only:
