@@ -1,0 +1,94 @@
+{
+  "schema_version": "nanodesign.v0.fused_rmsnorm_check.1",
+  "date": "2026-08-31",
+  "architecture_changed": false,
+  "environment": {
+    "gpu": "NVIDIA H100 80GB HBM3",
+    "python": "3.12",
+    "pytorch": "2.7.1+cu128",
+    "cuda_runtime": "12.8",
+    "isolated_nvcc": "12.8.93",
+    "isolated_compiler": "GCC 12.4"
+  },
+  "source": {
+    "foundry_commit": "aad357b776e3c0d6b973080f8f8c4bcf3ed21e40",
+    "apex_commit": "77a4b7a824c988c62fae477b05bf87727512c309"
+  },
+  "cluster_apptainer": {
+    "python": "3.10.12",
+    "pytorch": "2.0.1+cu117",
+    "cuda": "11.7",
+    "compatible_with_nanodesign": false
+  },
+  "isolated_apex": {
+    "build_succeeded": true,
+    "h100_bfloat16_forward_backward_succeeded": true,
+    "foundry_selected_fused_rmsnorm": true,
+    "main_environment_modified": false,
+    "runtime_requires_isolated_libstdcxx": true,
+    "pytorch_2_7_autocast_deprecation_warnings": true
+  },
+  "benchmark": {
+    "seed": 7,
+    "mode": "standard",
+    "diffusion_batch_size": 4,
+    "warmup_steps": 3,
+    "timed_steps": 10,
+    "records": [
+      {
+        "sample_id": "ppiref50k:117e_A_B",
+        "atoms": 756,
+        "implementation": "torch.nn.RMSNorm",
+        "training_step_ms": 115.747526,
+        "forward_ms": 37.823597,
+        "backward_ms": 71.748362,
+        "peak_allocated_bytes": 714119168,
+        "peak_reserved_bytes": 792723456
+      },
+      {
+        "sample_id": "ppiref50k:117e_A_B",
+        "atoms": 756,
+        "implementation": "apex.FusedRMSNorm",
+        "training_step_ms": 125.032869,
+        "forward_ms": 45.801632,
+        "backward_ms": 73.012369,
+        "peak_allocated_bytes": 709493248,
+        "peak_reserved_bytes": 824180736
+      },
+      {
+        "sample_id": "sabdab2:pdb_00009nk9_A_+",
+        "atoms": 1750,
+        "implementation": "torch.nn.RMSNorm",
+        "training_step_ms": 142.873,
+        "forward_ms": 58.617607,
+        "backward_ms": 77.988387,
+        "peak_allocated_bytes": 3033918464,
+        "peak_reserved_bytes": 3202351104
+      },
+      {
+        "sample_id": "sabdab2:pdb_00009nk9_A_+",
+        "atoms": 1750,
+        "implementation": "apex.FusedRMSNorm",
+        "training_step_ms": 150.74408,
+        "forward_ms": 65.131742,
+        "backward_ms": 79.401165,
+        "peak_allocated_bytes": 3019348992,
+        "peak_reserved_bytes": 3179282432
+      }
+    ]
+  },
+  "numerical_semantics": {
+    "torch_default_eps": "torch.finfo(input.dtype).eps",
+    "apex_default_eps": 0.00001,
+    "equivalent_by_default": false,
+    "forward_comparison": [
+      {"dtype": "fp32", "input_scale": 1.0, "relative_l2": 0.0000049175, "max_abs": 0.0000214577},
+      {"dtype": "fp32", "input_scale": 0.1, "relative_l2": 0.000494163, "max_abs": 0.00209427},
+      {"dtype": "fp32", "input_scale": 0.01, "relative_l2": 0.0460559, "max_abs": 0.156004},
+      {"dtype": "bf16", "input_scale": 1.0, "relative_l2": 0.0000305173, "max_abs": 0.00195313},
+      {"dtype": "bf16", "input_scale": 0.1, "relative_l2": 0.00168044, "max_abs": 0.015625},
+      {"dtype": "bf16", "input_scale": 0.01, "relative_l2": 0.0461019, "max_abs": 0.1875}
+    ]
+  },
+  "recommendation": "Keep torch.nn.RMSNorm for NanoDesign v0; do not install Apex in the main environment."
+}
