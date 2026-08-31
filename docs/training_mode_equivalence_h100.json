@@ -1,0 +1,136 @@
+{
+  "device": "NVIDIA H100 80GB HBM3",
+  "model_config": {
+    "atom_attention_keys": 64,
+    "atom_decoder_blocks": 2,
+    "atom_encoder_blocks": 2,
+    "c_atom": 64,
+    "c_atompair": 16,
+    "c_s": 128,
+    "c_time": 128,
+    "c_token": 240,
+    "c_z": 64,
+    "diffusion_pairformer_blocks": 1,
+    "diffusion_transformer_blocks": 6,
+    "initializer_pairformer_blocks": 1,
+    "recycle_steps": 1,
+    "sampling_steps": 50
+  },
+  "precision": "bfloat16",
+  "records": [
+    {
+      "atoms": 756,
+      "bucket": "small",
+      "chunked_output_keys": [
+        "X_L",
+        "sequence_indices_I",
+        "sequence_logits_I"
+      ],
+      "differences": {
+        "loss.coordinate": {
+          "max_absolute": 1.1444091796875e-05,
+          "mean_absolute": 1.1444091796875e-05,
+          "relative_l2": 1.381174115522299e-06,
+          "rms_absolute": 1.1444091796875e-05
+        },
+        "loss.sequence": {
+          "max_absolute": 2.89231538772583e-05,
+          "mean_absolute": 2.89231538772583e-05,
+          "relative_l2": 0.000145669502671808,
+          "rms_absolute": 2.89231538772583e-05
+        },
+        "loss.total": {
+          "max_absolute": 1.71661376953125e-05,
+          "mean_absolute": 1.71661376953125e-05,
+          "relative_l2": 2.023277147600311e-06,
+          "rms_absolute": 1.71661376953125e-05
+        },
+        "output.X_L": {
+          "max_absolute": 0.007808685302734375,
+          "mean_absolute": 0.0005198920844122767,
+          "relative_l2": 2.7608166419668123e-05,
+          "rms_absolute": 0.0013333485694602132
+        },
+        "output.sequence_indices_I": {
+          "max_absolute": 0.0,
+          "mean_absolute": 0.0,
+          "relative_l2": 0.0,
+          "rms_absolute": 0.0
+        },
+        "output.sequence_logits_I": {
+          "max_absolute": 0.02783203125,
+          "mean_absolute": 0.006474925670772791,
+          "relative_l2": 0.009667957201600075,
+          "rms_absolute": 0.008328636176884174
+        }
+      },
+      "sample_id": "ppiref50k:117e_A_B",
+      "standard_output_keys": [
+        "X_L",
+        "sequence_indices_I",
+        "sequence_logits_I"
+      ],
+      "task": "protein_binder",
+      "tokens": 54
+    },
+    {
+      "atoms": 1750,
+      "bucket": "medium",
+      "chunked_output_keys": [
+        "X_L",
+        "sequence_indices_I",
+        "sequence_logits_I"
+      ],
+      "differences": {
+        "loss.coordinate": {
+          "max_absolute": 1.430511474609375e-05,
+          "mean_absolute": 1.430511474609375e-05,
+          "relative_l2": 1.7289150946453447e-06,
+          "rms_absolute": 1.430511474609375e-05
+        },
+        "loss.sequence": {
+          "max_absolute": 0.0,
+          "mean_absolute": 0.0,
+          "relative_l2": 0.0,
+          "rms_absolute": 0.0
+        },
+        "loss.total": {
+          "max_absolute": 1.430511474609375e-05,
+          "mean_absolute": 1.430511474609375e-05,
+          "relative_l2": 1.7229128843609942e-06,
+          "rms_absolute": 1.430511474609375e-05
+        },
+        "output.X_L": {
+          "max_absolute": 0.0058574676513671875,
+          "mean_absolute": 9.33335250010714e-05,
+          "relative_l2": 1.743396387610119e-05,
+          "rms_absolute": 0.0005320790805853903
+        },
+        "output.sequence_indices_I": {
+          "max_absolute": 0.0,
+          "mean_absolute": 0.0,
+          "relative_l2": 0.0,
+          "rms_absolute": 0.0
+        },
+        "output.sequence_logits_I": {
+          "max_absolute": 0.0234375,
+          "mean_absolute": 0.0041481731459498405,
+          "relative_l2": 0.006621378939598799,
+          "rms_absolute": 0.005589404609054327
+        }
+      },
+      "sample_id": "sabdab2:pdb_00009nk9_A_+",
+      "standard_output_keys": [
+        "X_L",
+        "sequence_indices_I",
+        "sequence_logits_I"
+      ],
+      "task": "antibody_h3",
+      "tokens": 125
+    }
+  ],
+  "same_seed_parameter_max_absolute": 0.0,
+  "schema_version": "nanodesign.v0.training_mode_equivalence.1",
+  "seed": 7,
+  "state_dict_key_difference": []
+}
