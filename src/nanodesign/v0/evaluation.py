@@ -18,6 +18,7 @@ from nanodesign.v0.evaluators import (
     evaluate_rna,
     framework_aligned_h3_rmsd,
     run_dockq,
+    run_pyrosetta_interface_analyzer,
     run_rosetta_interface_analyzer,
     run_usalign_rna,
 )
@@ -112,6 +113,7 @@ __all__ = [
     "framework_aligned_h3_rmsd",
     "get_protocol",
     "run_dockq",
+    "run_pyrosetta_interface_analyzer",
     "run_rosetta_interface_analyzer",
     "run_usalign_rna",
 ]

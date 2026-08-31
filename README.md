@@ -81,10 +81,15 @@ python3.12 -m pip install -e '.[model,data]'
 - RNA：RhoFold+ 独立 refold，US-align RNA 计算 scTM/scRMSD，DockQ v2 计算 native
   RNA–target interface。
 
-本地已实际 smoke-test DockQ 2.1.3、US-align v20260527、H3 AAR/RMSD 和官方 RFD3NA
-forward/backward/EDM generation。ColabFold、RhoFold+ 和 Rosetta 属于外部重量级软件；运行
-全量 benchmark 前仍需在执行机器配置其模型权重，以及 Rosetta 的许可安装。代码不会在它们
-缺失时接受手填 metric 冒充真实结果。
+本地已实际运行 DockQ 2.1.3、US-align v20260527、RhoFold+、官方 quarterly PyRosetta
+InterfaceAnalyzer，以及官方 RFD3NA forward/backward/50-step EDM generation。ColabFold 使用
+集群的 1.5.5 module；代码不会在任何外部工具缺失时接受手填 metric 冒充真实结果。PyRosetta
+受 Rosetta non-commercial license 约束，不作为 CI 的自动下载依赖。
+
+第一次真实三任务 pilot（12 steps、D=4、seed 7）已完成，三个 task 的固定 validation
+coordinate/sequence/total loss 均下降，三条 generation 均写出有限 PDB；精确运行记录见
+[baseline_pilot.json](docs/baseline_pilot.json)。这只是训练链路和 learning-signal 验证，不冒充
+正式 baseline result。
 
 `scTM`、`scRMSD` 和 `DockQ` 是 computational structure/interface evaluation，**不等于
 真实 binding affinity**。NanoDesign v0 不声称得到实验 Kd。

@@ -522,6 +522,51 @@ def run_rosetta_interface_analyzer(
     return {destination: float(row[source]) for destination, source in aliases.items()}
 
 
+def run_pyrosetta_interface_analyzer(
+    complex_path: str | Path,
+    *,
+    target_chains: str,
+    binder_chains: str,
+    python_executable: str | Path,
+    analyzer_script: str | Path,
+) -> dict[str, float]:
+    """Run the same InterfaceAnalyzerMover through an official PyRosetta build."""
+
+    python_executable, analyzer_script = Path(python_executable), Path(analyzer_script)
+    if not python_executable.is_file():
+        raise EvaluationError(f"PyRosetta Python does not exist: {python_executable}")
+    if not analyzer_script.is_file():
+        raise EvaluationError(f"PyRosetta analyzer script does not exist: {analyzer_script}")
+    with tempfile.TemporaryDirectory(prefix="nanodesign-pyrosetta-") as directory:
+        output = Path(directory) / "interface.json"
+        _run(
+            [
+                str(python_executable),
+                str(analyzer_script),
+                str(complex_path),
+                "--interface",
+                f"{target_chains}_{binder_chains}",
+                "--output",
+                str(output),
+            ]
+        )
+        metrics = json.loads(output.read_text(encoding="utf-8"))
+    expected = {
+        "rosetta_interface_delta_g",
+        "shape_complementarity",
+        "interface_dsasa",
+        "interface_residue_count",
+        "interface_hbond_count",
+        "interface_unsatisfied_hbonds",
+    }
+    if set(metrics) != expected:
+        raise EvaluationError(f"PyRosetta output keys differ: {sorted(set(metrics) ^ expected)}")
+    result = {name: float(value) for name, value in metrics.items()}
+    if not all(np.isfinite(value) for value in result.values()):
+        raise EvaluationError("PyRosetta emitted non-finite interface metrics")
+    return result
+
+
 def run_colabfold_prediction(
     fasta: str | Path,
     output_dir: str | Path,
@@ -654,6 +699,42 @@ def count_bindcraft_clashes(structure_path: str | Path, *, threshold: float = 2.
     return clashes
 
 
+def count_bindcraft_interface_residues(
+    structure_path: str | Path,
+    *,
+    target_chains: Sequence[str],
+    binder_chain: str,
+    cutoff: float = 4.0,
+) -> int:
+    """Count binder residues with a heavy atom within BindCraft's 4 A interface cutoff."""
+
+    model = _model(structure_path)
+    target = np.asarray(
+        [
+            (atom.pos.x, atom.pos.y, atom.pos.z)
+            for chain_id in target_chains
+            for residue in _chain(model, chain_id)
+            for atom in residue
+            if atom.element.name != "H"
+        ],
+        dtype=np.float64,
+    )
+    if target.size == 0:
+        raise EvaluationError("target contains no heavy atoms for interface counting")
+    squared_cutoff = cutoff**2
+    count = 0
+    for residue in _chain(model, binder_chain):
+        binder = np.asarray(
+            [(atom.pos.x, atom.pos.y, atom.pos.z) for atom in residue if atom.element.name != "H"],
+            dtype=np.float64,
+        )
+        if binder.size and np.any(
+            np.sum((binder[:, None, :] - target[None, :, :]) ** 2, axis=-1) <= squared_cutoff
+        ):
+            count += 1
+    return count
+
+
 def evaluate_protein_binder(
     generated_complex: str | Path,
     *,
@@ -662,6 +743,8 @@ def evaluate_protein_binder(
     output_dir: str | Path,
     colabfold_executable: str | Path = "colabfold_batch",
     rosetta_executable: str | Path = "InterfaceAnalyzer.linuxgccrelease",
+    pyrosetta_python: str | Path | None = None,
+    pyrosetta_analyzer_script: str | Path | None = None,
 ) -> ProteinBinderResult:
     """Run the frozen NanoDesign v0 binder protocol from structure to pass/fail."""
 
@@ -713,11 +796,29 @@ def evaluate_protein_binder(
         designed_binder_chain=binder_chain,
         predicted_binder_chain="A",
     )
-    rosetta = run_rosetta_interface_analyzer(
-        predicted_complex,
-        target_chains="".join(predicted_chain_ids[:-1]),
-        binder_chains=predicted_chain_ids[-1],
-        executable=rosetta_executable,
+    if (pyrosetta_python is None) != (pyrosetta_analyzer_script is None):
+        raise ValueError("PyRosetta Python and analyzer script must be supplied together")
+    if pyrosetta_python is not None and pyrosetta_analyzer_script is not None:
+        rosetta = run_pyrosetta_interface_analyzer(
+            predicted_complex,
+            target_chains="".join(predicted_chain_ids[:-1]),
+            binder_chains=predicted_chain_ids[-1],
+            python_executable=pyrosetta_python,
+            analyzer_script=pyrosetta_analyzer_script,
+        )
+    else:
+        rosetta = run_rosetta_interface_analyzer(
+            predicted_complex,
+            target_chains="".join(predicted_chain_ids[:-1]),
+            binder_chains=predicted_chain_ids[-1],
+            executable=rosetta_executable,
+        )
+    rosetta["interface_residue_count"] = float(
+        count_bindcraft_interface_residues(
+            predicted_complex,
+            target_chains=predicted_chain_ids[:-1],
+            binder_chain=predicted_chain_ids[-1],
+        )
     )
     metrics = {
         **confidence,

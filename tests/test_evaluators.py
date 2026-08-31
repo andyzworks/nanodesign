@@ -13,6 +13,7 @@ from nanodesign.v0.evaluators import (
     evaluate_rna,
     framework_aligned_h3_rmsd,
     run_dockq,
+    run_pyrosetta_interface_analyzer,
     run_usalign_rna,
 )
 
@@ -30,7 +31,7 @@ def _protein_pdb(sequences: list[str]) -> str:
                 ("O", 3.0, "O"),
             ):
                 x = (residue_index - 1) * 3.8 + dx
-                y = chain_index * 10.0
+                y = chain_index * 3.0
                 lines.append(
                     f"ATOM  {serial:5d} {atom_name:^4s} ALA {chain}{residue_index:4d}    "
                     f"{x:8.3f}{y:8.3f}{0.0:8.3f}  1.00 90.00          {element:>2s}"
@@ -72,7 +73,7 @@ def test_h3_rmsd_uses_framework_alignment():
 
 def test_complete_binder_evaluation_path_runs_tools_and_frozen_filters(tmp_path):
     generated = tmp_path / "generated.pdb"
-    generated.write_text(_protein_pdb(["AAA", "AAA"]), encoding="utf-8")
+    generated.write_text(_protein_pdb(["AAAAAAAA", "AAAAAAAA"]), encoding="utf-8")
     colabfold = tmp_path / "fake_colabfold.py"
     colabfold.write_text(
         """#!/usr/bin/env python3
@@ -86,7 +87,7 @@ for ci, seq in enumerate(chains):
     chain=chr(ord('A')+ci)
     for ri, _ in enumerate(seq, 1):
         for name, dx, elem in [('N',0.,'N'),('CA',1.2,'C'),('C',2.4,'C'),('O',3.,'O')]:
-            x=(ri-1)*3.8+dx; y=ci*10.
+            x=(ri-1)*3.8+dx; y=ci*3.
             lines.append(f'ATOM  {serial:5d} {name:^4s} ALA {chain}{ri:4d}    {x:8.3f}{y:8.3f}{0.:8.3f}  1.00 90.00          {elem:>2s}')
             serial += 1
     lines.append('TER')
@@ -126,6 +127,26 @@ path.write_text('SCORE: dG_separated sc_value dSASA_int nres_int hbonds_int delt
         "diversity": 0.5,
         "cluster_level_success": 1.0,
     }
+
+
+def test_pyrosetta_interface_wrapper_parses_native_json(tmp_path):
+    analyzer = tmp_path / "fake_pyrosetta.py"
+    analyzer.write_text(
+        """import argparse, json, pathlib
+p=argparse.ArgumentParser(); p.add_argument('complex'); p.add_argument('--interface'); p.add_argument('--output'); a=p.parse_args()
+pathlib.Path(a.output).write_text(json.dumps({'rosetta_interface_delta_g':-5,'shape_complementarity':.7,'interface_dsasa':100,'interface_residue_count':9,'interface_hbond_count':4,'interface_unsatisfied_hbonds':2}))
+""",
+        encoding="utf-8",
+    )
+    result = run_pyrosetta_interface_analyzer(
+        tmp_path / "complex.pdb",
+        target_chains="A",
+        binder_chains="B",
+        python_executable=sys.executable,
+        analyzer_script=analyzer,
+    )
+    assert result["rosetta_interface_delta_g"] == -5.0
+    assert result["shape_complementarity"] == 0.7
 
 
 def test_complete_rna_evaluation_path_runs_refold_alignment_and_dockq(tmp_path):
@@ -236,3 +257,30 @@ def test_complete_antibody_evaluation_handles_native_missing_light_chain():
     assert result.h3_aar == pytest.approx(1.0)
     assert result.h3_rmsd == pytest.approx(0.0, abs=1e-6)
     assert result.dockq == pytest.approx(1.0, abs=1e-6)
+
+
+def test_real_pyrosetta_interface_analyzer_when_official_install_is_present():
+    root = Path(__file__).resolve().parents[1]
+    python = root / "data/envs/pyrosetta312/bin/python"
+    analyzer = root / "scripts/pyrosetta_interface_analyzer.py"
+    structure = root / "data/raw/ppiref/ppiref50k/04/104l_A_B.pdb"
+    if os.environ.get("NANODESIGN_RUN_HEAVY_EVAL") != "1":
+        pytest.skip("set NANODESIGN_RUN_HEAVY_EVAL=1 to run licensed heavyweight tools")
+    if not python.is_file() or not structure.is_file():
+        pytest.skip("official PyRosetta/data snapshot is not part of a source-only checkout")
+    result = run_pyrosetta_interface_analyzer(
+        structure,
+        target_chains="A",
+        binder_chains="B",
+        python_executable=python,
+        analyzer_script=analyzer,
+    )
+    assert set(result) == {
+        "rosetta_interface_delta_g",
+        "shape_complementarity",
+        "interface_dsasa",
+        "interface_residue_count",
+        "interface_hbond_count",
+        "interface_unsatisfied_hbonds",
+    }
+    assert all(np.isfinite(value) for value in result.values())
