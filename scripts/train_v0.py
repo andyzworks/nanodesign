@@ -56,23 +56,20 @@ def _load_rows(root: Path, split: str) -> dict[str, list[dict[str, Any]]]:
     }
 
 
-def _first_fully_represented_row(
-    rows: list[dict[str, Any]], *, max_context_tokens: int
-) -> dict[str, Any]:
-    """Select the first held-out sample whose complete fixed context fits the config."""
+def _fixed_context_tokens(row: dict[str, Any]) -> int:
+    design_tokens = 0
+    for chain in row["chains"]:
+        if chain["role"] in {"binder", "rna_aptamer", "rna_design_region"}:
+            design_tokens += int(chain["resolved_residues"])
+        elif chain["role"] == "antibody_framework+cdr_h3":
+            design_tokens += len(chain["design_residue_keys"])
+    return sum(int(chain["resolved_residues"]) for chain in row["chains"]) - design_tokens
 
-    for row in rows:
-        design_tokens = 0
-        for chain in row["chains"]:
-            if chain["role"] in {"binder", "rna_aptamer", "rna_design_region"}:
-                design_tokens += int(chain["resolved_residues"])
-            elif chain["role"] == "antibody_framework+cdr_h3":
-                design_tokens += len(chain["design_residue_keys"])
-        fixed_tokens = sum(int(chain["resolved_residues"]) for chain in row["chains"])
-        fixed_tokens -= design_tokens
-        if fixed_tokens <= max_context_tokens:
-            return row
-    raise ValueError("no held-out sample has a fully representable fixed context")
+
+def _generation_row(rows: list[dict[str, Any]], *, max_context_tokens: int) -> dict[str, Any]:
+    """Prefer a complete held-out context, with a deterministic smoke fallback."""
+
+    return next((row for row in rows if _fixed_context_tokens(row) <= max_context_tokens), rows[0])
 
 
 def _batch(
@@ -227,7 +224,7 @@ def main() -> None:
     output_dir.mkdir(parents=True, exist_ok=True)
     generation = {}
     for task, rows in test_rows.items():
-        row = _first_fully_represented_row(rows, max_context_tokens=max_context_tokens)
+        row = _generation_row(rows, max_context_tokens=max_context_tokens)
         generation_batch = _batch(
             root,
             row,
@@ -251,6 +248,7 @@ def main() -> None:
                 torch.isfinite(output["X_L"]).all()
                 and torch.isfinite(output["sequence_logits_I"]).all()
             ),
+            "fixed_context_complete": _fixed_context_tokens(row) <= max_context_tokens,
         }
 
     stats_path = root / "docs/data_v0_stats.json"
@@ -284,7 +282,9 @@ def main() -> None:
         "task_steps": dict(task_steps),
         "validation_samples_per_task": args.validation_samples_per_task,
         "generation_split": "test",
-        "generation_selection": "first sample with complete fixed context within token budget",
+        "generation_selection": (
+            "first sample with complete fixed context; first-sample fallback for low-budget smoke"
+        ),
         "validation_before": validation_before,
         "validation_after": validation_after,
         "generation": generation,
