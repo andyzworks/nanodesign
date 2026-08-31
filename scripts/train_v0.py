@@ -8,6 +8,7 @@ import hashlib
 import json
 import random
 from collections import defaultdict
+from contextlib import nullcontext
 from pathlib import Path
 from typing import Any
 
@@ -114,16 +115,22 @@ def _validation(
             torch.manual_seed(validation_seed)
             if device.type == "cuda":
                 torch.cuda.manual_seed_all(validation_seed)
-            metrics = evaluate_loss(
-                model,
-                _batch(
-                    root,
-                    row,
-                    device=device,
-                    max_context_tokens=max_context_tokens,
-                    noise_level=0.5,
-                ),
+            precision = (
+                torch.autocast(device_type="cuda", dtype=torch.bfloat16)
+                if device.type == "cuda"
+                else nullcontext()
             )
+            with precision:
+                metrics = evaluate_loss(
+                    model,
+                    _batch(
+                        root,
+                        row,
+                        device=device,
+                        max_context_tokens=max_context_tokens,
+                        noise_level=0.5,
+                    ),
+                )
             for name, value in metrics.items():
                 values[name].append(value)
         report[task] = {name: float(np.mean(items)) for name, items in values.items()}
@@ -232,10 +239,16 @@ def main() -> None:
             max_context_tokens=max_context_tokens,
             noise_level=0.5,
         )
-        output = generate(
-            model,
-            generation_batch,
+        precision = (
+            torch.autocast(device_type="cuda", dtype=torch.bfloat16)
+            if device.type == "cuda"
+            else nullcontext()
         )
+        with precision:
+            output = generate(
+                model,
+                generation_batch,
+            )
         structure_path = output_dir / "generations" / f"{task}.pdb"
         sequences = write_generation_structure(output, generation_batch, structure_path)
         generation[task] = {
