@@ -1,16 +1,16 @@
 {
   "status": "pilot_not_final_baseline",
-  "slurm_job_id": 5231886,
+  "slurm_job_id": 5233256,
   "slurm_state": "COMPLETED",
-  "wall_time": "00:03:20",
-  "max_rss_kib": 4586984,
+  "wall_time": "00:05:03",
+  "max_rss_kib": 45986076,
   "steps": 12,
   "samples_seen": 12,
   "batch_size_complexes": 1,
   "diffusion_realizations_per_complex": 4,
   "seed": 7,
   "model_parameter_count": 6849538,
-  "max_context_tokens": 16,
+  "max_context_tokens": 384,
   "task_steps": {
     "protein_binder": 4,
     "antibody_h3": 4,
@@ -18,31 +18,41 @@
   },
   "validation_before_after": {
     "protein_binder": {
-      "loss": [6.699850559234619, 5.7376790046691895],
-      "coordinate_loss": [6.444872856140137, 5.5056304931640625],
-      "sequence_loss": [0.25497791171073914, 0.23204831779003143]
+      "loss": [6.582914352416992, 5.959095001220703],
+      "coordinate_loss": [6.327720403671265, 5.7102015018463135],
+      "sequence_loss": [0.255193792283535, 0.2488934025168419]
     },
     "antibody_h3": {
-      "loss": [6.000275611877441, 5.324647426605225],
-      "coordinate_loss": [5.764403343200684, 5.132155418395996],
-      "sequence_loss": [0.23587238788604736, 0.19249212741851807]
+      "loss": [6.644219398498535, 6.004923343658447],
+      "coordinate_loss": [6.618279218673706, 5.981092214584351],
+      "sequence_loss": [0.025940346531569958, 0.02383115841075778]
     },
     "rna": {
-      "loss": [8.433135986328125, 8.107800483703613],
-      "coordinate_loss": [8.28857707977295, 7.9776201248168945],
-      "sequence_loss": [0.14455914497375488, 0.13018035888671875]
+      "loss": [7.046725749969482, 6.3786256313323975],
+      "coordinate_loss": [6.926427364349365, 6.270349025726318],
+      "sequence_loss": [0.12029853742569685, 0.10827672481536865]
     }
   },
   "generation": {
+    "split": "test",
+    "fixed_context_complete": true,
     "protein_binder": "finite evaluator-ready PDB",
     "antibody_h3": "finite evaluator-ready PDB",
     "rna": "finite evaluator-ready PDB"
   },
+  "antibody_generation_evaluation": {
+    "sample_id": "sabdab2:pdb_000010zo_A_+",
+    "h3_aar": 0.0,
+    "h3_rmsd": 74.80348292055297,
+    "dockq": 0.8290591254208971,
+    "note": "12-step computational pilot; not the final baseline"
+  },
   "rna_generation_evaluation": {
-    "sctm": 0.05348,
-    "scrmsd": 29.97,
-    "structure_confidence": 0.5446721639703301,
-    "dockq": 0.0,
+    "sample_id": "pdb_rna_target:1k8w:0",
+    "sctm": 0.0335,
+    "scrmsd": 26.08,
+    "structure_confidence": 0.5525935746374584,
+    "dockq": 0.014142540715932744,
     "note": "RhoFold+/US-align/DockQ computational pilot; not binding affinity"
   },
   "formal_training_job_id": 5231899,
