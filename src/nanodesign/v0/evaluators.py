@@ -1074,8 +1074,15 @@ def evaluate_rna(
     # candidate this is a valid design failure, not an infrastructure failure, and
     # its frozen interface-recovery score is zero.  All other DockQ failures remain
     # hard errors through run_dockq.
+    ordered_chains = [*target_chains, rna_chain]
+    identical_chain_mapping = "".join(ordered_chains)
     dockq = (
-        run_dockq(predicted_complex, native_complex, executable=dockq_executable)["total_dockq"]
+        run_dockq(
+            predicted_complex,
+            native_complex,
+            executable=dockq_executable,
+            mapping=f"{identical_chain_mapping}:{identical_chain_mapping}",
+        )["total_dockq"]
         if _has_interchain_contact(native_complex, target_chains, rna_chain)
         else 0.0
     )

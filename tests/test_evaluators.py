@@ -181,6 +181,7 @@ np.savez(out/'results.npz', plddt=np.array([0.9,0.8,1.0]))
     dockq.write_text(
         """#!/usr/bin/env python3
 import json, pathlib, sys
+assert sys.argv[sys.argv.index('--mapping')+1] == 'AB:AB'
 path=pathlib.Path(sys.argv[sys.argv.index('--json')+1]); path.write_text(json.dumps({'GlobalDockQ':0.9}))
 """,
         encoding="utf-8",
