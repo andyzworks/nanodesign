@@ -1,5 +1,6 @@
 import json
 import os
+import subprocess
 import sys
 from pathlib import Path
 
@@ -10,7 +11,6 @@ from nanodesign.v0.evaluators import (
     aggregate_binder_results,
     evaluate_antibody_h3,
     evaluate_protein_binder,
-    evaluate_rna,
     framework_aligned_h3_rmsd,
     run_dockq,
     run_pyrosetta_interface_analyzer,
@@ -149,7 +149,7 @@ pathlib.Path(a.output).write_text(json.dumps({'rosetta_interface_delta_g':-5,'sh
     assert result["shape_complementarity"] == 0.7
 
 
-def test_complete_rna_evaluation_path_runs_refold_alignment_and_dockq(tmp_path):
+def test_rna_evaluation_cli_runs_complete_mock_path_and_writes_metrics(tmp_path):
     designed = tmp_path / "designed_complex.pdb"
     designed.write_text(_rna_target_pdb(), encoding="utf-8")
     fasta = tmp_path / "rna.fasta"
@@ -187,23 +187,52 @@ path=pathlib.Path(sys.argv[sys.argv.index('--json')+1]); path.write_text(json.du
     )
     os.chmod(usalign, 0o755)
     os.chmod(dockq, 0o755)
-    result = evaluate_rna(
-        fasta,
-        designed,
-        designed,
-        target_chains=["A"],
-        rna_chain="B",
-        output_dir=tmp_path / "rna_evaluation",
-        rhofold_python=sys.executable,
-        rhofold_inference_script=rhofold,
-        rhofold_checkpoint=checkpoint,
-        usalign_executable=usalign,
-        dockq_executable=dockq,
+    root = Path(__file__).resolve().parents[1]
+    output_dir = tmp_path / "rna_evaluation"
+    result_json = tmp_path / "result.json"
+    subprocess.run(
+        [
+            sys.executable,
+            str(root / "scripts/evaluate_rna.py"),
+            "--generated-fasta",
+            str(fasta),
+            "--generated-complex",
+            str(designed),
+            "--native-complex",
+            str(designed),
+            "--target-chain",
+            "A",
+            "--rna-chain",
+            "B",
+            "--output-dir",
+            str(output_dir),
+            "--result-json",
+            str(result_json),
+            "--rhofold-python",
+            sys.executable,
+            "--rhofold-inference-script",
+            str(rhofold),
+            "--rhofold-checkpoint",
+            str(checkpoint),
+            "--usalign-executable",
+            str(usalign),
+            "--dockq-executable",
+            str(dockq),
+        ],
+        cwd=root,
+        check=True,
     )
-    assert result.sctm == pytest.approx(1.0)
-    assert result.scrmsd == pytest.approx(0.0)
-    assert result.structure_confidence == pytest.approx(0.9)
-    assert result.dockq == pytest.approx(0.9)
+    result = json.loads(result_json.read_text(encoding="utf-8"))
+    assert result == {
+        "DockQ": pytest.approx(0.9),
+        "scRMSD": pytest.approx(0.0),
+        "scTM": pytest.approx(1.0),
+        "structure_confidence": pytest.approx(0.9),
+    }
+    assert (output_dir / "generated_rna.fasta").read_text(
+        encoding="utf-8"
+    ) == ">generated_rna\nAAA\n"
+    assert (output_dir / "predicted_rna_target_complex.pdb").is_file()
 
 
 def test_real_usalign_rna_smoke_when_frozen_data_is_present():
