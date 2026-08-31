@@ -4,7 +4,7 @@ from pathlib import Path
 
 import pytest
 
-from nanodesign.v0.data.real import load_catalog_example
+from nanodesign.v0.data.real import load_catalog_example, load_foundry_training_example
 
 EXPECTED = {
     "protein_binder": {"train": 40883, "validation": 5110, "test": 5110},
@@ -70,3 +70,24 @@ def test_rna_sources_have_frozen_non_overclaiming_semantics_when_snapshot_is_pre
             "rna_structural_prior": {"rna_structure_prior"},
         }
         assert rna_roles == expected_roles[semantics]
+
+
+def test_antibody_context_crop_preserves_the_complete_fixed_framework_when_present():
+    root = Path(__file__).resolve().parents[1]
+    split = root / "data/processed/v0/splits/antibody_h3/validation.jsonl"
+    if not split.is_file():
+        pytest.skip("real data snapshot is not part of a source-only checkout")
+    row = json.loads(next(line for line in split.open(encoding="utf-8") if line.strip()))
+    heavy = next(chain for chain in row["chains"] if chain["role"] == "antibody_framework+cdr_h3")
+    light = [chain for chain in row["chains"] if chain["role"] == "antibody_framework"]
+    design_count = len(heavy["design_residue_keys"])
+    framework_count = (
+        heavy["resolved_residues"]
+        - design_count
+        + sum(chain["resolved_residues"] for chain in light)
+    )
+    assert framework_count > 16  # Exercise the protected-over-budget branch.
+
+    batch = load_foundry_training_example(root, row, max_context_tokens=16)
+    assert int(batch["ground_truth_sequence_mask"].sum()) == design_count
+    assert int(batch["ground_truth_sequence"].shape[0]) == framework_count + design_count

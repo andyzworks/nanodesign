@@ -282,6 +282,7 @@ def load_foundry_training_example(
     residue_indices: list[int] = []
     asym_ids: list[int] = []
     design_tokens: list[bool] = []
+    protected_context_tokens: list[bool] = []
     protein_tokens: list[bool] = []
     rna_tokens: list[bool] = []
     polar_tokens: list[bool] = []
@@ -337,6 +338,7 @@ def load_foundry_training_example(
             residue_indices.append(within_chain_index)
             asym_ids.append(numeric_chain_id)
             design_tokens.append(is_design)
+            protected_context_tokens.append(role == Role.ANTIBODY_FRAMEWORK)
             token_chain_names.append(str(chain_record["chain_id"]))
             token_residue_keys.append(key)
 
@@ -404,6 +406,10 @@ def load_foundry_training_example(
             raise ValueError("max_context_tokens must be non-negative or None")
         design_indices = [index for index, value in enumerate(design_tokens) if value]
         context_indices = [index for index, value in enumerate(design_tokens) if not value]
+        protected_indices = [index for index, value in enumerate(protected_context_tokens) if value]
+        optional_context_indices = [
+            index for index in context_indices if not protected_context_tokens[index]
+        ]
         if design_indices and len(context_indices) > max_context_tokens:
             centers = np.zeros((len(design_tokens), 3), dtype=np.float32)
             center_seen = np.zeros(len(design_tokens), dtype=bool)
@@ -417,19 +423,21 @@ def load_foundry_training_example(
                 raise ValueError(f"{row['sample_id']}: token missing atom23 center")
             design_centers = centers[design_indices]
             ranked_context = sorted(
-                context_indices,
+                optional_context_indices,
                 key=lambda index: (
                     float(np.linalg.norm(design_centers - centers[index], axis=1).min()),
                     index,
                 ),
             )
-            selected = sorted(design_indices + ranked_context[:max_context_tokens])
+            optional_budget = max(0, max_context_tokens - len(protected_indices))
+            selected = sorted(design_indices + protected_indices + ranked_context[:optional_budget])
             remap = {old: new for new, old in enumerate(selected)}
             token_restypes = [token_restypes[index] for index in selected]
             token_native_restypes = [token_native_restypes[index] for index in selected]
             residue_indices = [residue_indices[index] for index in selected]
             asym_ids = [asym_ids[index] for index in selected]
             design_tokens = [design_tokens[index] for index in selected]
+            protected_context_tokens = [protected_context_tokens[index] for index in selected]
             protein_tokens = [protein_tokens[index] for index in selected]
             rna_tokens = [rna_tokens[index] for index in selected]
             polar_tokens = [polar_tokens[index] for index in selected]
