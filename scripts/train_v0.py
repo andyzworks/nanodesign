@@ -463,14 +463,27 @@ def main() -> None:
     selected_cache_root = args.feature_cache_root
     if args.feature_cache_root is not None:
         if args.feature_cache_stage_root is not None:
-            try:
-                stage_catalog_cache(
-                    args.feature_cache_root, args.feature_cache_stage_root, scheduled_rows
-                )
+            stage_succeeded = True
+            if distributed.is_primary:
+                try:
+                    # One node-local database copy serves all local ranks.  Copying the
+                    # same multi-GB SQLite files concurrently from every rank only
+                    # amplifies GPFS traffic and can race the atomic sidecars.
+                    stage_catalog_cache(
+                        args.feature_cache_root, args.feature_cache_stage_root, scheduled_rows
+                    )
+                except FeatureCacheError:
+                    stage_succeeded = False
+            if distributed.world_size > 1:
+                stage_status = torch.tensor(int(stage_succeeded), dtype=torch.int8, device=device)
+                dist.broadcast(stage_status, src=0)
+                stage_succeeded = bool(stage_status.item())
+                dist.barrier()
+            if stage_succeeded:
                 selected_cache_root = args.feature_cache_stage_root
-            except FeatureCacheError:
-                if not args.feature_cache_fallback:
-                    raise
+            elif not args.feature_cache_fallback:
+                raise FeatureCacheError("rank 0 could not stage the finalized feature cache")
+            else:
                 selected_cache_root = args.feature_cache_root
         cache_spec = FeatureCacheSpec(
             manifest_sha256=manifest_sha,
