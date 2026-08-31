@@ -832,6 +832,39 @@ def _write_selected_chains(
     structure.write_pdb(str(destination))
 
 
+def _has_interchain_contact(
+    structure_path: str | Path,
+    left_chains: Sequence[str],
+    right_chain: str,
+    *,
+    cutoff: float = 5.0,
+) -> bool:
+    """Return whether the declared interface contains a heavy-atom contact."""
+
+    model = _model(structure_path)
+
+    def positions(chain_ids: Sequence[str]) -> np.ndarray:
+        values = [
+            (atom.pos.x, atom.pos.y, atom.pos.z)
+            for chain_id in chain_ids
+            for residue in _chain(model, chain_id)
+            for atom in residue
+            if atom.element.name != "H"
+        ]
+        if not values:
+            raise EvaluationError(f"no heavy atoms in interface chains {list(chain_ids)}")
+        return np.asarray(values, dtype=np.float64)
+
+    left = positions(left_chains)
+    right = positions([right_chain])
+    squared_cutoff = cutoff**2
+    for start in range(0, len(left), 512):
+        distances = left[start : start + 512, None, :] - right[None, :, :]
+        if np.any(np.sum(distances * distances, axis=-1) <= squared_cutoff):
+            return True
+    return False
+
+
 def _build_rna_target_complex(
     designed_complex: str | Path,
     predicted_rna: str | Path,
@@ -908,7 +941,15 @@ def evaluate_rna(
         target_chains=target_chains,
         designed_rna_chain=rna_chain,
     )
-    dockq = run_dockq(predicted_complex, native_complex, executable=dockq_executable)["total_dockq"]
+    # DockQ exits non-zero when the reference has no interface.  For a generated
+    # candidate this is a valid design failure, not an infrastructure failure, and
+    # its frozen interface-recovery score is zero.  All other DockQ failures remain
+    # hard errors through run_dockq.
+    dockq = (
+        run_dockq(predicted_complex, native_complex, executable=dockq_executable)["total_dockq"]
+        if _has_interchain_contact(native_complex, target_chains, rna_chain)
+        else 0.0
+    )
     return RnaEvaluationResult(
         sctm=structural["sctm"],
         scrmsd=structural["scrmsd"],

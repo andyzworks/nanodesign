@@ -49,7 +49,7 @@ def _rna_target_pdb() -> str:
             x = (residue_index - 1) * 3.8 + dx
             lines.append(
                 f"ATOM  {serial:5d} {atom_name:^4s}   A B{residue_index:4d}    "
-                f"{x:8.3f}{10.0:8.3f}{0.0:8.3f}  1.00 90.00          {element:>2s}"
+                f"{x:8.3f}{3.0:8.3f}{0.0:8.3f}  1.00 90.00          {element:>2s}"
             )
             serial += 1
     lines.extend(("TER", "END"))
