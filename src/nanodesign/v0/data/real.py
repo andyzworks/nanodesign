@@ -108,6 +108,50 @@ def _catalog_residue_keys(
     return keys
 
 
+def _catalog_residues_by_key(
+    chain: gemmi.Chain,
+) -> dict[tuple[int, str], list[gemmi.Residue]]:
+    """Keep microheterogeneous candidates instead of silently overwriting them."""
+
+    residues: dict[tuple[int, str], list[gemmi.Residue]] = {}
+    for residue in chain:
+        key = (int(residue.seqid.num), _normalise_icode(residue.seqid.icode))
+        residues.setdefault(key, []).append(residue)
+    return residues
+
+
+def _select_catalog_residue(
+    candidates: dict[tuple[int, str], list[gemmi.Residue]],
+    key: tuple[int, str],
+    expected_letter: str,
+    polymer: Polymer,
+    *,
+    sample_id: str,
+) -> gemmi.Residue:
+    """Resolve one catalog token using the same letter/altloc rules as preprocessing."""
+
+    central_name = "CA" if polymer == Polymer.PROTEIN else "C1'"
+    matching = []
+    for residue in candidates.get(key, []):
+        letter = (
+            _protein_letter(residue.name)
+            if polymer == Polymer.PROTEIN
+            else _rna_letter(residue.name)
+        )
+        if letter == expected_letter and any(
+            atom.name.strip() == central_name and _accepted_altloc(atom) for atom in residue
+        ):
+            matching.append(residue)
+    if not matching:
+        raise ValueError(
+            f"{sample_id}: no catalog-matching {expected_letter} residue at {key} "
+            f"with accepted atom23 center {central_name}"
+        )
+    # Preprocessing traverses Gemmi residues in file order. If an exact duplicate is
+    # present, retain that deterministic order rather than allowing a dict overwrite.
+    return matching[0]
+
+
 def _role_for_token(chain: dict[str, Any], key: tuple[int, str]) -> Role:
     role = chain["role"]
     if role == "target":
@@ -165,15 +209,17 @@ def load_catalog_example(dataset_root: str | Path, row: dict[str, Any]) -> Desig
         chain = _select_chain(model, str(chain_record["chain_id"]))
         polymer = _polymer_for_chain(chain_record)
         expected_keys = _catalog_residue_keys(chain_record, chain, polymer)
-        residues_by_key = {
-            (int(residue.seqid.num), _normalise_icode(residue.seqid.icode)): residue
-            for residue in chain
-        }
+        residues_by_key = _catalog_residues_by_key(chain)
         observed_sequence: list[str] = []
         for within_chain_index, key in enumerate(expected_keys):
-            residue = residues_by_key.get(key)
-            if residue is None:
-                raise ValueError(f"{row['sample_id']}: unresolved catalog residue {key}")
+            expected_letter = chain_record["sequence"][within_chain_index]
+            residue = _select_catalog_residue(
+                residues_by_key,
+                key,
+                expected_letter,
+                polymer,
+                sample_id=row["sample_id"],
+            )
             letter = (
                 _protein_letter(residue.name)
                 if polymer == Polymer.PROTEIN
@@ -306,15 +352,17 @@ def load_foundry_training_example(
             raise ValueError(f"{row['sample_id']}: raw path escapes dataset root")
         chain = _select_chain(_read_model(str(path)), str(chain_record["chain_id"]))
         polymer = _polymer_for_chain(chain_record)
-        residues_by_key = {
-            (int(residue.seqid.num), _normalise_icode(residue.seqid.icode)): residue
-            for residue in chain
-        }
+        residues_by_key = _catalog_residues_by_key(chain)
         expected_keys = _catalog_residue_keys(chain_record, chain, polymer)
         for within_chain_index, key in enumerate(expected_keys):
-            residue = residues_by_key.get(key)
-            if residue is None:
-                raise ValueError(f"{row['sample_id']}: unresolved catalog residue {key}")
+            expected_letter = chain_record["sequence"][within_chain_index]
+            residue = _select_catalog_residue(
+                residues_by_key,
+                key,
+                expected_letter,
+                polymer,
+                sample_id=row["sample_id"],
+            )
             role = _role_for_token(chain_record, key)
             is_design = role in {Role.BINDER, Role.CDR, Role.RNA_APTAMER}
             if polymer == Polymer.PROTEIN:

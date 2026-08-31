@@ -91,3 +91,23 @@ def test_antibody_context_crop_preserves_the_complete_fixed_framework_when_prese
     batch = load_foundry_training_example(root, row, max_context_tokens=16)
     assert int(batch["ground_truth_sequence_mask"].sum()) == design_count
     assert int(batch["ground_truth_sequence"].shape[0]) == framework_count + design_count
+
+
+def test_microheterogeneous_rna_residue_uses_catalog_sequence_and_accepted_altloc():
+    root = Path(__file__).resolve().parents[1]
+    split = root / "data/processed/v0/splits/rna_binding/train.jsonl"
+    if not split.is_file():
+        pytest.skip("real data snapshot is not part of a source-only checkout")
+    row = next(
+        json.loads(line)
+        for line in split.open(encoding="utf-8")
+        if '"sample_id":"pdb_rna_target:9kfx:0"' in line
+    )
+    rna = next(chain for chain in row["chains"] if chain["role"] == "rna_design_region")
+
+    example = load_catalog_example(root, row)
+    batch = load_foundry_training_example(root, row, noise_level=0.5, max_context_tokens=384)
+
+    assert int(example.design_mask.sum()) == rna["resolved_residues"]
+    assert int(batch["ground_truth_sequence_mask"].sum()) == rna["resolved_residues"]
+    assert bool(batch["ground_truth_atom_mask"].any())
