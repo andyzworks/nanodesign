@@ -1070,6 +1070,11 @@ def evaluate_rna(
         target_chains=target_chains,
         designed_rna_chain=rna_chain,
     )
+    # Normalize mmCIF auth/label asym IDs through Gemmi and restrict the native
+    # structure to the declared interface. DockQ's Bio.PDB mmCIF reader otherwise
+    # may expose label_asym_id values that differ from the frozen catalog chain IDs.
+    native_interface = output_dir / "native_rna_target_complex.pdb"
+    _write_selected_chains(native_complex, native_interface, [*target_chains, rna_chain])
     # DockQ exits non-zero when the reference has no interface.  For a generated
     # candidate this is a valid design failure, not an infrastructure failure, and
     # its frozen interface-recovery score is zero.  All other DockQ failures remain
@@ -1079,11 +1084,11 @@ def evaluate_rna(
     dockq = (
         run_dockq(
             predicted_complex,
-            native_complex,
+            native_interface,
             executable=dockq_executable,
             mapping=f"{identical_chain_mapping}:{identical_chain_mapping}",
         )["total_dockq"]
-        if _has_interchain_contact(native_complex, target_chains, rna_chain)
+        if _has_interchain_contact(native_interface, target_chains, rna_chain)
         else 0.0
     )
     return RnaEvaluationResult(
