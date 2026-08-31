@@ -149,6 +149,7 @@ def test_cache_resamples_diffusion_but_preserves_all_deterministic_features(tmp_
     with SQLiteFeatureCache(tmp_path, readonly=True, lru_size=1) as cache:
         first = cache.get(row, _spec(noise_level=None, random_seed=11))
         second = cache.get(row, _spec(noise_level=None, random_seed=12))
+    assert first["ground_truth_positions"].is_contiguous()
     assert not torch.equal(first["t"], second["t"])
     assert not torch.equal(first["X_noisy_L"], second["X_noisy_L"])
     deterministic_first = {

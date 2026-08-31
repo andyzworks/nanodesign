@@ -1,0 +1,95 @@
+{
+  "benchmark": {
+    "catalog": "antibody_h3/test",
+    "cached_real_samples": 16,
+    "device": "H100",
+    "diffusion_batch_size": 4,
+    "max_context_tokens": 384,
+    "measured_samples_per_configuration": 56,
+    "simulated_compute_ms": 10.0,
+    "storage": "node-local staged SQLite"
+  },
+  "training_integration_smoke": {
+    "cache_miss_fallback": true,
+    "finite_loss": 8.741561889648438,
+    "forward_backward": true,
+    "generation_all_three_tasks_finite": true,
+    "num_workers": 2,
+    "pin_memory_non_blocking_h2d": true,
+    "sample_id": "ppiref50k:6lcj_C_D",
+    "steps": 1
+  },
+  "recommended": {
+    "gpu_data_wait_fraction": 0.26622148827821,
+    "num_workers": 4,
+    "persistent_workers": true,
+    "pin_memory": true,
+    "prefetch_factor": 4,
+    "samples_per_second": 59.30500953299041
+  },
+  "results": [
+    {
+      "gpu_data_wait_fraction": 0.7781421034974703,
+      "gpu_data_wait_seconds": 1.982373281614855,
+      "h2d_wait_seconds": 0.17768101301044226,
+      "next_wait_seconds": 1.8046922686044127,
+      "num_workers": 0,
+      "prefetch_factor": null,
+      "samples_per_second": 21.981711618086912
+    },
+    {
+      "gpu_data_wait_fraction": 0.3016897608068508,
+      "gpu_data_wait_seconds": 0.29738474171608686,
+      "h2d_wait_seconds": 0.19311862182803452,
+      "next_wait_seconds": 0.10426611988805234,
+      "num_workers": 2,
+      "prefetch_factor": 2,
+      "samples_per_second": 56.81067060701096
+    },
+    {
+      "gpu_data_wait_fraction": 0.33892037232268046,
+      "gpu_data_wait_seconds": 0.3535402393899858,
+      "h2d_wait_seconds": 0.19255627179518342,
+      "next_wait_seconds": 0.16098396759480238,
+      "num_workers": 2,
+      "prefetch_factor": 4,
+      "samples_per_second": 53.684245060246205
+    },
+    {
+      "gpu_data_wait_fraction": 0.28216857943103285,
+      "gpu_data_wait_seconds": 0.26895110704936087,
+      "h2d_wait_seconds": 0.19368961895816028,
+      "next_wait_seconds": 0.07526148809120059,
+      "num_workers": 4,
+      "prefetch_factor": 2,
+      "samples_per_second": 58.75209297888402
+    },
+    {
+      "gpu_data_wait_fraction": 0.26622148827821,
+      "gpu_data_wait_seconds": 0.2513852280098945,
+      "h2d_wait_seconds": 0.19431558158248663,
+      "next_wait_seconds": 0.05706964642740786,
+      "num_workers": 4,
+      "prefetch_factor": 4,
+      "samples_per_second": 59.30500953299041
+    },
+    {
+      "gpu_data_wait_fraction": 0.2709685603005486,
+      "gpu_data_wait_seconds": 0.2651627839077264,
+      "h2d_wait_seconds": 0.1902046431787312,
+      "next_wait_seconds": 0.0749581407289952,
+      "num_workers": 8,
+      "prefetch_factor": 2,
+      "samples_per_second": 57.22612786457689
+    },
+    {
+      "gpu_data_wait_fraction": 0.2808080536282684,
+      "gpu_data_wait_seconds": 0.2774038224015385,
+      "h2d_wait_seconds": 0.18864483176730573,
+      "next_wait_seconds": 0.08875899063423276,
+      "num_workers": 8,
+      "prefetch_factor": 4,
+      "samples_per_second": 56.68721817546165
+    }
+  ]
+}

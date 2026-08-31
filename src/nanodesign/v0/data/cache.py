@@ -257,8 +257,10 @@ def _sample_diffusion(template: dict[str, Any], spec: FeatureCacheSpec) -> dict[
     positions = template["ground_truth_positions"][0]
     batch["t"] = timesteps
     batch["X_noisy_L"] = noisy
-    batch["ground_truth_positions"] = positions.unsqueeze(0).expand(
-        spec.diffusion_batch_size, -1, -1
+    # DataLoader pin-memory writes into a destination buffer and rejects overlapping
+    # expand views. Materialize the identical values for asynchronous pinned H2D.
+    batch["ground_truth_positions"] = (
+        positions.unsqueeze(0).expand(spec.diffusion_batch_size, -1, -1).contiguous()
     )
     batch["coord_atom_lvl_to_be_noised"] = positions.unsqueeze(0)
     return _validate_batch(batch, str(template["sample_id"]))

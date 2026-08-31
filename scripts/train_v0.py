@@ -19,6 +19,13 @@ import torch.distributed as dist
 from torch.nn.parallel import DistributedDataParallel
 
 from nanodesign.v0.config import load_config, validate_v0_config
+from nanodesign.v0.data.cache import FeatureCacheError, FeatureCacheSpec
+from nanodesign.v0.data.loader import (
+    CachedFeatureDataset,
+    build_async_feature_loader,
+    recursive_to_device,
+    stage_catalog_cache,
+)
 from nanodesign.v0.data.real import load_foundry_training_example, load_split_catalog
 from nanodesign.v0.distributed import (
     DistributedContext,
@@ -261,6 +268,22 @@ def main() -> None:
         help="save a resumable numbered checkpoint every N steps; 0 disables periodic saves",
     )
     parser.add_argument("--resume", type=Path, help="resume the same sample-budget run")
+    parser.add_argument(
+        "--feature-cache-root",
+        type=Path,
+        help="optional finalized SQLite feature-cache root; raw preprocessing remains fallback",
+    )
+    parser.add_argument(
+        "--feature-cache-stage-root",
+        type=Path,
+        help="optional node-local directory receiving whole task/split cache databases",
+    )
+    parser.add_argument("--data-workers", type=int, default=4)
+    parser.add_argument("--data-prefetch-factor", type=int, default=4)
+    parser.add_argument("--data-pin-memory", action=argparse.BooleanOptionalAction, default=True)
+    parser.add_argument(
+        "--feature-cache-fallback", action=argparse.BooleanOptionalAction, default=True
+    )
     args = parser.parse_args()
     if min(args.validation_samples_per_task, args.diffusion_batch_size) < 1:
         raise ValueError("validation samples and diffusion batch size must be positive")
@@ -270,6 +293,10 @@ def main() -> None:
         raise ValueError("steps must be positive")
     if args.checkpoint_every < 0:
         raise ValueError("checkpoint interval must be non-negative")
+    if args.data_workers < 0 or args.data_prefetch_factor < 1:
+        raise ValueError("data workers must be non-negative and prefetch factor positive")
+    if args.feature_cache_stage_root is not None and args.feature_cache_root is None:
+        raise ValueError("feature-cache staging requires --feature-cache-root")
 
     root = Path(__file__).resolve().parents[1]
     resolved = load_config(root / args.config)
@@ -346,6 +373,7 @@ def main() -> None:
         "world_size": distributed.world_size,
         "global_batch_size_complexes": distributed.world_size,
         "milestone_samples": milestones,
+        "feature_cache_enabled": args.feature_cache_root is not None,
     }
     if args.resume is not None:
         loaded = load_checkpoint(
@@ -403,6 +431,64 @@ def main() -> None:
             distributed=distributed,
         )
         _seed_process(args.seed, distributed.rank)
+
+    scheduled_rows = [
+        row_for_rank(
+            shuffled,
+            task_names,
+            optimizer_step=step,
+            rank=distributed.rank,
+            world_size=distributed.world_size,
+        )
+        for step in range(start_step, total_steps)
+    ]
+    async_loader = None
+    async_iterator = None
+    selected_cache_root = args.feature_cache_root
+    if args.feature_cache_root is not None:
+        if args.feature_cache_stage_root is not None:
+            try:
+                stage_catalog_cache(
+                    args.feature_cache_root, args.feature_cache_stage_root, scheduled_rows
+                )
+                selected_cache_root = args.feature_cache_stage_root
+            except FeatureCacheError:
+                if not args.feature_cache_fallback:
+                    raise
+                selected_cache_root = args.feature_cache_root
+        cache_spec = FeatureCacheSpec(
+            manifest_sha256=manifest_sha,
+            max_context_tokens=max_context_tokens,
+            diffusion_batch_size=args.diffusion_batch_size,
+            noise_level=None,
+            random_seed=None,
+        )
+        sampling_seeds = [
+            args.seed + 1_000_000 + step * distributed.world_size + distributed.rank
+            for step in range(start_step, total_steps)
+        ]
+        cached_dataset = CachedFeatureDataset(
+            root,
+            scheduled_rows,
+            cache_spec,
+            cache_root=selected_cache_root,
+            allow_fallback=args.feature_cache_fallback,
+            lru_size=8,
+            sampling_seeds=sampling_seeds,
+        )
+        async_loader = build_async_feature_loader(
+            cached_dataset,
+            num_workers=args.data_workers,
+            prefetch_factor=args.data_prefetch_factor,
+            persistent_workers=args.data_workers > 0,
+            pin_memory=args.data_pin_memory and device.type == "cuda",
+            multiprocessing_context="spawn",
+        )
+        # DataLoader creates a base seed in the parent process. Worker sampling itself
+        # is explicitly seeded per optimizer step, so preserve the model RNG exactly.
+        parent_rng = capture_rng_state()
+        async_iterator = iter(async_loader)
+        restore_rng_state(parent_rng)
 
     def elapsed_wall_seconds() -> float:
         elapsed = torch.tensor(
@@ -494,13 +580,19 @@ def main() -> None:
             rank=distributed.rank,
             world_size=distributed.world_size,
         )
-        batch = _batch(
-            root,
-            row,
-            device=device,
-            max_context_tokens=max_context_tokens,
-            diffusion_batch_size=args.diffusion_batch_size,
-        )
+        if async_iterator is not None:
+            batch = next(async_iterator)
+            if batch["sample_id"] != row["sample_id"]:
+                raise RuntimeError("asynchronous loader changed the scheduled sample order")
+            batch = recursive_to_device(batch, device, non_blocking=True)
+        else:
+            batch = _batch(
+                root,
+                row,
+                device=device,
+                max_context_tokens=max_context_tokens,
+                diffusion_batch_size=args.diffusion_batch_size,
+            )
         if device.type == "cuda":
             with torch.autocast(device_type="cuda", dtype=torch.bfloat16):
                 metrics = train_step(model, optimizer, batch, training_config)
@@ -607,6 +699,23 @@ def main() -> None:
         "generation": generation,
         "checkpoint_step": total_steps,
         "history": history,
+        "data_loader": {
+            "feature_cache_enabled": args.feature_cache_root is not None,
+            "selected_cache_root": (
+                str(Path(selected_cache_root).resolve())
+                if selected_cache_root is not None
+                else None
+            ),
+            "num_workers": args.data_workers if args.feature_cache_root is not None else 0,
+            "prefetch_factor": (
+                args.data_prefetch_factor if args.feature_cache_root is not None else None
+            ),
+            "persistent_workers": bool(args.feature_cache_root and args.data_workers > 0),
+            "pin_memory": bool(
+                args.feature_cache_root and args.data_pin_memory and device.type == "cuda"
+            ),
+            "fallback_enabled": args.feature_cache_fallback,
+        },
     }
     (output_dir / "training_report.json").write_text(
         json.dumps(report, indent=2, sort_keys=True) + "\n", encoding="utf-8"
