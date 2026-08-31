@@ -337,7 +337,11 @@ def main() -> None:
             base_model,
             device_ids=[distributed.local_rank] if device.type == "cuda" else None,
             output_device=distributed.local_rank if device.type == "cuda" else None,
-            find_unused_parameters=True,
+            # Every frozen RFD3NA-Tiny parameter participates in both official
+            # execution paths.  Foundry also activation-checkpoints its blocks;
+            # enabling DDP's unused-parameter graph traversal can deadlock on the
+            # second reentrant backward even though no parameter is unused.
+            find_unused_parameters=False,
         )
         if distributed.world_size > 1
         else base_model
