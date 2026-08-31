@@ -5,11 +5,14 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import random
 from collections.abc import Mapping
 from dataclasses import asdict, dataclass
 from pathlib import Path
+from typing import Any
 
 import gemmi
+import numpy as np
 import torch
 
 from nanodesign.v0.config import validate_v0_config
@@ -335,6 +338,31 @@ def _assert_model_matches_resolved_config(
         )
 
 
+def _rng_state() -> dict[str, object]:
+    return {
+        "python": random.getstate(),
+        "numpy": np.random.get_state(),
+        "torch": torch.get_rng_state(),
+        "cuda": torch.cuda.get_rng_state_all() if torch.cuda.is_available() else None,
+    }
+
+
+def _restore_rng_state(state: Mapping[str, object]) -> None:
+    required = {"python", "numpy", "torch", "cuda"}
+    if required - set(state):
+        raise ValueError(f"checkpoint RNG state is missing {sorted(required - set(state))}")
+    random.setstate(state["python"])
+    np.random.set_state(state["numpy"])
+    torch.set_rng_state(state["torch"])
+    cuda_state = state["cuda"]
+    if cuda_state is not None:
+        if not torch.cuda.is_available():
+            raise RuntimeError("cannot restore a CUDA training RNG state without CUDA")
+        if len(cuda_state) != torch.cuda.device_count():
+            raise RuntimeError("checkpoint CUDA RNG device count differs from this training run")
+        torch.cuda.set_rng_state_all(cuda_state)
+
+
 def save_checkpoint(
     path: str | Path,
     *,
@@ -343,9 +371,21 @@ def save_checkpoint(
     step: int,
     manifest_sha256: str,
     resolved_config: Mapping[str, object],
+    samples_seen: int | None = None,
+    task_cursors: Mapping[str, int] | None = None,
+    task_steps: Mapping[str, int] | None = None,
+    history: list[Mapping[str, Any]] | None = None,
+    training_run_config: Mapping[str, object] | None = None,
+    validation_before: Mapping[str, object] | None = None,
 ) -> None:
     if step < 0:
         raise ValueError("checkpoint step must be non-negative")
+    samples_seen = step if samples_seen is None else samples_seen
+    if samples_seen < step:
+        raise ValueError("checkpoint samples_seen cannot be smaller than step")
+    for name, values in (("task_cursors", task_cursors), ("task_steps", task_steps)):
+        if values is not None and any(int(value) < 0 for value in values.values()):
+            raise ValueError(f"checkpoint {name} must be non-negative")
     _require_sha256(manifest_sha256, "manifest_sha256")
     validate_v0_config(resolved_config).require_ready()
     _assert_model_matches_resolved_config(model, resolved_config)
@@ -356,6 +396,13 @@ def save_checkpoint(
         "model": model.state_dict(),
         "optimizer": optimizer.state_dict(),
         "step": step,
+        "samples_seen": samples_seen,
+        "task_cursors": dict(task_cursors or {}),
+        "task_steps": dict(task_steps or {}),
+        "history": list(history or []),
+        "training_run_config": dict(training_run_config or {}),
+        "validation_before": dict(validation_before or {}),
+        "rng_state": _rng_state(),
         "manifest_sha256": manifest_sha256,
         "resolved_config": dict(resolved_config),
         "config_sha256": hashlib.sha256(config_json.encode()).hexdigest(),
@@ -375,6 +422,7 @@ def load_checkpoint(
     model: NanoDesignTiny,
     optimizer: torch.optim.Optimizer | None = None,
     expected_manifest_sha256: str | None = None,
+    restore_rng: bool = False,
 ) -> dict[str, object]:
     checkpoint = torch.load(path, map_location="cpu", weights_only=False)
     if checkpoint.get("schema_version") != SPEC_VERSION:
@@ -399,4 +447,9 @@ def load_checkpoint(
     model.load_state_dict(checkpoint["model"], strict=True)
     if optimizer is not None:
         optimizer.load_state_dict(checkpoint["optimizer"])
+    if restore_rng:
+        rng_state = checkpoint.get("rng_state")
+        if not isinstance(rng_state, Mapping):
+            raise TypeError("checkpoint is missing its RNG state")
+        _restore_rng_state(rng_state)
     return checkpoint

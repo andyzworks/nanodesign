@@ -152,9 +152,18 @@ def main() -> None:
     parser.add_argument("--max-context-tokens", type=int)
     parser.add_argument("--device", default="cuda")
     parser.add_argument("--output-dir", required=True)
+    parser.add_argument(
+        "--checkpoint-every",
+        type=int,
+        default=100,
+        help="save a resumable numbered checkpoint every N steps; 0 disables periodic saves",
+    )
+    parser.add_argument("--resume", type=Path, help="resume to --steps total steps")
     args = parser.parse_args()
     if min(args.steps, args.validation_samples_per_task, args.diffusion_batch_size) < 1:
         raise ValueError("steps, validation samples, and diffusion batch size must be positive")
+    if args.checkpoint_every < 0:
+        raise ValueError("checkpoint interval must be non-negative")
 
     root = Path(__file__).resolve().parents[1]
     resolved = load_config(root / args.config)
@@ -172,6 +181,10 @@ def main() -> None:
     model = NanoDesignTiny(_model_config(resolved)).to(device)
     training_config = TrainingConfig()
     optimizer = build_optimizer(model, training_config)
+    output_dir = Path(args.output_dir)
+    output_dir.mkdir(parents=True, exist_ok=True)
+    stats_path = root / "docs/data_v0_stats.json"
+    manifest_sha = hashlib.sha256(stats_path.read_bytes()).hexdigest()
     train_rows = _load_rows(root, "train")
     validation_rows = _load_rows(root, "validation")
     test_rows = _load_rows(root, "test")
@@ -179,21 +192,79 @@ def main() -> None:
     for task_index, (task, rows) in enumerate(train_rows.items()):
         shuffled[task] = list(rows)
         random.Random(args.seed + task_index).shuffle(shuffled[task])
-
-    validation_before = _validation(
-        model,
-        root,
-        validation_rows,
-        device=device,
-        max_context_tokens=max_context_tokens,
-        samples_per_task=args.validation_samples_per_task,
-        seed=args.seed,
-    )
     task_names = list(SPLITS)
     cursors = defaultdict(int)
     history = []
     task_steps = defaultdict(int)
-    for step in range(args.steps):
+    samples_seen = 0
+    start_step = 0
+    training_run_config = {
+        "seed": args.seed,
+        "diffusion_batch_size": args.diffusion_batch_size,
+        "max_context_tokens": max_context_tokens,
+        "validation_samples_per_task": args.validation_samples_per_task,
+        "task_names": task_names,
+    }
+    if args.resume is not None:
+        loaded = load_checkpoint(
+            args.resume,
+            model=model,
+            optimizer=optimizer,
+            expected_manifest_sha256=manifest_sha,
+            restore_rng=True,
+        )
+        if loaded.get("training_run_config") != training_run_config:
+            raise ValueError("resume checkpoint training-run configuration mismatch")
+        start_step = int(loaded["step"])
+        if start_step > args.steps:
+            raise ValueError("resume checkpoint step exceeds requested total steps")
+        samples_seen = int(loaded["samples_seen"])
+        loaded_cursors = {str(key): int(value) for key, value in loaded["task_cursors"].items()}
+        loaded_task_steps = {str(key): int(value) for key, value in loaded["task_steps"].items()}
+        if (set(loaded_cursors) | set(loaded_task_steps)) - set(task_names):
+            raise ValueError("resume checkpoint contains an unknown task cursor")
+        cursors.update(loaded_cursors)
+        task_steps.update(loaded_task_steps)
+        for task in task_names:
+            cursors[task] += 0
+            task_steps[task] += 0
+        history = list(loaded["history"])
+        if not (
+            samples_seen == start_step == len(history) == sum(cursors.values())
+            and dict(cursors) == dict(task_steps)
+        ):
+            raise ValueError("resume checkpoint step/sample/task state is inconsistent")
+        validation_before = loaded.get("validation_before")
+        if not isinstance(validation_before, dict) or not validation_before:
+            raise ValueError("resume checkpoint lacks initial validation state")
+    else:
+        validation_before = _validation(
+            model,
+            root,
+            validation_rows,
+            device=device,
+            max_context_tokens=max_context_tokens,
+            samples_per_task=args.validation_samples_per_task,
+            seed=args.seed,
+        )
+
+    def save_training_checkpoint(path: Path, completed_step: int) -> None:
+        save_checkpoint(
+            path,
+            model=model,
+            optimizer=optimizer,
+            step=completed_step,
+            samples_seen=samples_seen,
+            task_cursors=cursors,
+            task_steps=task_steps,
+            history=history,
+            training_run_config=training_run_config,
+            validation_before=validation_before,
+            manifest_sha256=manifest_sha,
+            resolved_config=resolved,
+        )
+
+    for step in range(start_step, args.steps):
         task = task_names[step % len(task_names)]
         rows = shuffled[task]
         row = rows[cursors[task] % len(rows)]
@@ -212,11 +283,20 @@ def main() -> None:
             metrics = train_step(model, optimizer, batch, training_config)
         history.append({"step": step + 1, "task": task, "sample_id": row["sample_id"], **metrics})
         task_steps[task] += 1
+        samples_seen += 1
         print(
             f"step={step + 1} task={task} loss={metrics['loss']:.6f} "
             f"coord={metrics['coordinate_loss']:.6f} seq={metrics['sequence_loss']:.6f}",
             flush=True,
         )
+        completed_step = step + 1
+        if args.checkpoint_every and completed_step % args.checkpoint_every == 0:
+            save_training_checkpoint(
+                output_dir / "checkpoints" / f"step-{completed_step:08d}.pt", completed_step
+            )
+
+    checkpoint_path = output_dir / "checkpoint.pt"
+    save_training_checkpoint(checkpoint_path, args.steps)
 
     validation_after = _validation(
         model,
@@ -227,8 +307,6 @@ def main() -> None:
         samples_per_task=args.validation_samples_per_task,
         seed=args.seed,
     )
-    output_dir = Path(args.output_dir)
-    output_dir.mkdir(parents=True, exist_ok=True)
     generation = {}
     for task, rows in test_rows.items():
         row = _generation_row(rows, max_context_tokens=max_context_tokens)
@@ -264,17 +342,6 @@ def main() -> None:
             "fixed_context_complete": _fixed_context_tokens(row) <= max_context_tokens,
         }
 
-    stats_path = root / "docs/data_v0_stats.json"
-    manifest_sha = hashlib.sha256(stats_path.read_bytes()).hexdigest()
-    checkpoint_path = output_dir / "checkpoint.pt"
-    save_checkpoint(
-        checkpoint_path,
-        model=model,
-        optimizer=optimizer,
-        step=args.steps,
-        manifest_sha256=manifest_sha,
-        resolved_config=resolved,
-    )
     restored = NanoDesignTiny(_model_config(resolved)).to(device)
     restored_optimizer = build_optimizer(restored, training_config)
     loaded = load_checkpoint(
@@ -285,7 +352,10 @@ def main() -> None:
     )
     report = {
         "steps": args.steps,
-        "samples_seen": args.steps,
+        "samples_seen": samples_seen,
+        "starting_step": start_step,
+        "resumed_from": str(args.resume.resolve()) if args.resume is not None else None,
+        "checkpoint_every": args.checkpoint_every,
         "batch_size_complexes": 1,
         "diffusion_realizations_per_complex": args.diffusion_batch_size,
         "seed": args.seed,
