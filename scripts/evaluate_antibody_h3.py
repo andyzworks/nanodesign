@@ -5,20 +5,22 @@ from __future__ import annotations
 
 import argparse
 import json
+from collections.abc import Sequence
 from pathlib import Path
 from typing import Any
 
 from nanodesign.v0.evaluators import EvaluationError, evaluate_antibody_h3
 
 
-def _catalog_row(catalog: Path, sample_id: str) -> dict[str, Any]:
+def _catalog_row(catalogs: Sequence[Path], sample_id: str) -> dict[str, Any]:
     matches = []
-    with catalog.open(encoding="utf-8") as handle:
-        for line in handle:
-            if line.strip():
-                row = json.loads(line)
-                if row.get("sample_id") == sample_id:
-                    matches.append(row)
+    for catalog in catalogs:
+        with catalog.open(encoding="utf-8") as handle:
+            for line in handle:
+                if line.strip():
+                    row = json.loads(line)
+                    if row.get("sample_id") == sample_id:
+                        matches.append(row)
     if len(matches) != 1:
         raise EvaluationError(
             f"expected exactly one catalog row for {sample_id!r}, found {len(matches)}"
@@ -78,7 +80,7 @@ def main() -> None:
     parser.add_argument(
         "--catalog",
         type=Path,
-        default=Path("data/processed/v0/splits/antibody_h3/validation.jsonl"),
+        help="optional exact split catalog; by default search frozen train/validation/test",
     )
     parser.add_argument("--repo-root", type=Path, default=Path(__file__).resolve().parents[1])
     parser.add_argument("--dockq-executable", default="DockQ")
@@ -95,8 +97,15 @@ def main() -> None:
         prediction, sample_id = args.prediction, args.sample_id
 
     root = args.repo_root.resolve()
-    catalog = args.catalog if args.catalog.is_absolute() else root / args.catalog
-    row = _catalog_row(catalog, sample_id)
+    if args.catalog is not None:
+        catalogs = [args.catalog if args.catalog.is_absolute() else root / args.catalog]
+    else:
+        split_root = root / "data/processed/v0/splits/antibody_h3"
+        catalogs = [split_root / f"{split}.jsonl" for split in ("train", "validation", "test")]
+    missing_catalogs = [str(path) for path in catalogs if not path.is_file()]
+    if missing_catalogs:
+        raise EvaluationError(f"antibody split catalogs do not exist: {missing_catalogs}")
+    row = _catalog_row(catalogs, sample_id)
     heavy_chain, light_chain, antigen_chains = _catalog_chain_roles(row)
     reference = args.reference or _resolve_reference(root, row)
     if not prediction.is_file():

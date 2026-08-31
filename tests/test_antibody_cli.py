@@ -41,7 +41,10 @@ def test_antibody_cli_runs_complete_catalog_resolved_path(tmp_path, light_chain,
     reference.write_text(_antibody_pdb(include_light=light_chain is not None), encoding="utf-8")
     prediction.write_text(_antibody_pdb(include_light=light_chain is not None), encoding="utf-8")
     sample_id = "sabdab2:synthetic_H_L"
-    catalog = tmp_path / "validation.jsonl"
+    catalog = tmp_path / "data/processed/v0/splits/antibody_h3/test.jsonl"
+    catalog.parent.mkdir(parents=True)
+    for split in ("train", "validation"):
+        (catalog.parent / f"{split}.jsonl").write_text("", encoding="utf-8")
     catalog.write_text(
         json.dumps(
             {
@@ -94,8 +97,6 @@ path.write_text(json.dumps({{'GlobalDockQ': 0.75}}))
             str(root / "scripts/evaluate_antibody_h3.py"),
             "--training-report",
             str(report),
-            "--catalog",
-            str(catalog),
             "--repo-root",
             str(tmp_path),
             "--dockq-executable",
