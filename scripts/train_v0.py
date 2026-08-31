@@ -382,14 +382,13 @@ def main() -> None:
             base_model,
             device_ids=[distributed.local_rank] if device.type == "cuda" else None,
             output_device=distributed.local_rank if device.type == "cuda" else None,
-            # Every frozen RFD3NA-Tiny parameter participates in both official
-            # execution paths.  Foundry also activation-checkpoints its blocks;
-            # enabling DDP's unused-parameter graph traversal can deadlock on the
-            # second reentrant backward even though no parameter is unused.  Declaring
-            # the unchanged RFD3 parameter graph static is PyTorch's supported DDP
-            # path for reentrant activation checkpointing.
-            find_unused_parameters=False,
-            static_graph=True,
+            # RFD3NA's process_pll path is mask/task dependent, so the set of
+            # parameters receiving gradients can change between Binder, H3, and RNA
+            # steps. Foundry activation checkpointing uses use_reentrant=False, which
+            # supports PyTorch's dynamic unused-parameter traversal. Do not declare a
+            # static graph here: doing so fails on the first repeated task cycle.
+            find_unused_parameters=True,
+            static_graph=False,
         )
         if distributed.world_size > 1
         else base_model

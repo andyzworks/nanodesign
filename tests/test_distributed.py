@@ -211,6 +211,71 @@ def test_two_rank_gloo_ddp_reduces_metrics_and_uses_distinct_samples(tmp_path):
     assert sorted(validation) == list(range(5))
 
 
+class _CheckpointedTaskBranches(torch.nn.Module):
+    """Small analogue of mask-dependent RFD3NA process_pll parameters."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.shared = torch.nn.Linear(2, 2)
+        self.protein_only = torch.nn.Linear(2, 2)
+        self.rna_only = torch.nn.Linear(2, 2)
+
+    def forward(self, value: torch.Tensor, task: str) -> torch.Tensor:
+        def task_branch(hidden: torch.Tensor) -> torch.Tensor:
+            if task == "protein":
+                return self.protein_only(hidden)
+            return self.rna_only(hidden)
+
+        hidden = self.shared(value)
+        return torch.utils.checkpoint.checkpoint(task_branch, hidden, use_reentrant=False)
+
+
+def _dynamic_graph_worker(rank: int, rendezvous: str, output_dir: str) -> None:
+    world_size = 2
+    dist.init_process_group(
+        "gloo", init_method=f"file://{rendezvous}", rank=rank, world_size=world_size
+    )
+    torch.manual_seed(41)
+    model = _CheckpointedTaskBranches()
+    ddp = DistributedDataParallel(
+        model,
+        find_unused_parameters=True,
+        static_graph=False,
+    )
+    optimizer = torch.optim.SGD(ddp.parameters(), lr=0.01)
+    for task in ("protein", "rna", "protein", "rna"):
+        optimizer.zero_grad(set_to_none=True)
+        loss = ddp(torch.ones(1, 2), task).square().mean()
+        loss.backward()
+        optimizer.step()
+    torch.save(
+        {
+            "state": model.state_dict(),
+            "find_unused_parameters": ddp.find_unused_parameters,
+            "static_graph": ddp.static_graph,
+        },
+        Path(output_dir) / f"dynamic-rank-{rank}.pt",
+    )
+    dist.destroy_process_group()
+
+
+def test_dynamic_task_graph_with_non_reentrant_checkpointing_is_ddp_safe(tmp_path):
+    rendezvous = tmp_path / "dynamic-gloo-init"
+    mp.spawn(
+        _dynamic_graph_worker,
+        args=(str(rendezvous), str(tmp_path)),
+        nprocs=2,
+        join=True,
+    )
+    rank0 = torch.load(tmp_path / "dynamic-rank-0.pt", weights_only=True)
+    rank1 = torch.load(tmp_path / "dynamic-rank-1.pt", weights_only=True)
+    assert rank0["find_unused_parameters"] is rank1["find_unused_parameters"] is True
+    assert rank0["static_graph"] is rank1["static_graph"] is False
+    assert rank0["state"].keys() == rank1["state"].keys()
+    for name in rank0["state"]:
+        assert torch.equal(rank0["state"][name], rank1["state"][name])
+
+
 def _mixed_size_mode_worker(rank: int, rendezvous: str, output_dir: str) -> None:
     world_size = 2
     dist.init_process_group(
