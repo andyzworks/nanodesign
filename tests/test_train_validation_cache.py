@@ -64,8 +64,9 @@ def test_validation_prefers_cache_without_changing_samples_or_fixed_noise(tmp_pa
 
     monkeypatch.setattr(train_v0, "_batch", raw_loader_must_not_run)
     monkeypatch.setattr(train_v0, "evaluate_loss", fake_evaluate)
+    fake_model = type("FakeModel", (), {})()
     arguments = {
-        "model": object(),
+        "model": fake_model,
         "root": tmp_path,
         "rows": {"antibody_h3": rows},
         "device": torch.device("cpu"),
@@ -93,3 +94,72 @@ def test_validation_prefers_cache_without_changing_samples_or_fixed_noise(tmp_pa
         == second
         == {"antibody_h3": {"loss": 3.0, "coordinate_loss": 2.0, "sequence_loss": 1.0}}
     )
+
+
+def test_validation_routes_each_sample_by_atom_count(monkeypatch, tmp_path):
+    rows = [_row(0), _row(1)]
+    batches = {
+        rows[0]["sample_id"]: _batch(rows[0]["sample_id"]),
+        rows[1]["sample_id"]: _batch(rows[1]["sample_id"]),
+    }
+    batches[rows[0]["sample_id"]]["f"]["atom_to_token_map"] = torch.zeros(8008)
+    batches[rows[1]["sample_id"]]["f"]["atom_to_token_map"] = torch.zeros(8009)
+    observed = {}
+
+    class FakeModel:
+        execution_mode = "standard"
+
+    model = FakeModel()
+
+    def fake_batch(_root, row, **_kwargs):
+        return batches[row["sample_id"]]
+
+    def fake_evaluate(current_model, batch):
+        observed[batch["sample_id"]] = current_model.execution_mode
+        return {"loss": 3.0, "coordinate_loss": 2.0, "sequence_loss": 1.0}
+
+    monkeypatch.setattr(train_v0, "_batch", fake_batch)
+    monkeypatch.setattr(train_v0, "evaluate_loss", fake_evaluate)
+    train_v0._validation(
+        model,
+        tmp_path,
+        {"antibody_h3": rows},
+        device=torch.device("cpu"),
+        max_context_tokens=384,
+        samples_per_task=2,
+        seed=7,
+        distributed=DistributedContext(rank=0, world_size=1),
+    )
+
+    assert observed == {
+        rows[0]["sample_id"]: "standard",
+        rows[1]["sample_id"]: "chunked",
+    }
+
+
+def test_validation_force_chunked_overrides_atom_threshold(monkeypatch, tmp_path):
+    row = _row(0)
+    observed = []
+
+    class FakeModel:
+        execution_mode = "standard"
+
+    def fake_evaluate(model, _batch):
+        observed.append(model.execution_mode)
+        return {"loss": 3.0, "coordinate_loss": 2.0, "sequence_loss": 1.0}
+
+    monkeypatch.setattr(train_v0, "_batch", lambda *_args, **_kwargs: _batch(row["sample_id"]))
+    monkeypatch.setattr(train_v0, "evaluate_loss", fake_evaluate)
+    train_v0._validation(
+        FakeModel(),
+        tmp_path,
+        {"antibody_h3": [row]},
+        device=torch.device("cpu"),
+        max_context_tokens=384,
+        samples_per_task=1,
+        seed=7,
+        distributed=DistributedContext(rank=0, world_size=1),
+        force_chunked=True,
+    )
+
+    assert observed == ["chunked"]

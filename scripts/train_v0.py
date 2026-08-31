@@ -144,6 +144,7 @@ def _validation(
     feature_cache_root: Path | None = None,
     feature_cache_fallback: bool = True,
     manifest_sha256: str | None = None,
+    force_chunked: bool = False,
 ) -> dict[str, dict[str, float]]:
     if feature_cache_root is not None and manifest_sha256 is None:
         raise ValueError("cached validation requires the frozen manifest SHA256")
@@ -199,6 +200,19 @@ def _validation(
                         max_context_tokens=max_context_tokens,
                         noise_level=0.5,
                     )
+                atom_map = batch.get("f", {}).get("atom_to_token_map")
+                if not isinstance(atom_map, torch.Tensor):
+                    raise TypeError("batch.f.atom_to_token_map must be a tensor")
+                # Training sets an explicit mode on every step so all DDP ranks use
+                # one backward graph.  Do not inherit the final training batch's
+                # mode here: validation has no backward/gradient synchronization and
+                # each rank may evaluate differently sized samples.  Route every
+                # local sample independently using the same profiled H100 threshold.
+                model.execution_mode = (
+                    "chunked"
+                    if force_chunked or atom_map.numel() > STANDARD_MODE_MAX_ATOMS
+                    else "standard"
+                )
                 precision = (
                     torch.autocast(device_type="cuda", dtype=torch.bfloat16)
                     if device.type == "cuda"
@@ -494,6 +508,7 @@ def main() -> None:
             feature_cache_root=args.feature_cache_root,
             feature_cache_fallback=args.feature_cache_fallback,
             manifest_sha256=manifest_sha,
+            force_chunked=force_chunked_execution,
         )
         _seed_process(args.seed, distributed.rank)
 
@@ -616,6 +631,7 @@ def main() -> None:
             feature_cache_root=args.feature_cache_root,
             feature_cache_fallback=args.feature_cache_fallback,
             manifest_sha256=manifest_sha,
+            force_chunked=force_chunked_execution,
         )
         restore_rng_state(local_rng)
         elapsed = elapsed_wall_seconds()
@@ -789,6 +805,7 @@ def main() -> None:
             feature_cache_root=args.feature_cache_root,
             feature_cache_fallback=args.feature_cache_fallback,
             manifest_sha256=manifest_sha,
+            force_chunked=force_chunked_execution,
         )
     generation = (
         _generation_outputs(
