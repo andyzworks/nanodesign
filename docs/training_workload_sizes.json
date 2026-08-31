@@ -1,0 +1,1255 @@
+{
+  "atom_threshold": 8008,
+  "generated_at_utc": "2026-08-31T16:33:32.036791+00:00",
+  "manifest": "docs/data_v0_stats.json",
+  "manifest_sha256": "6a194c2558c323c9f3f394a4df4ba9856c10a92f42c1ddb5e53ade03cc1cd584",
+  "schema_version": 1,
+  "tasks": {
+    "antibody_h3": {
+      "cache": {
+        "catalog_id_matches": 0,
+        "coverage_count": 0,
+        "coverage_fraction": 0.0,
+        "database": "data/cache/v0/antibody_cdr/train.sqlite3",
+        "database_rows_at_start": 0,
+        "finalization_status": "missing_or_invalid_sha256_sidecar",
+        "finalized": false,
+        "payload_rows_read": 0,
+        "stale_identity_rows": 0
+      },
+      "cached_atom_count_quantiles": null,
+      "catalog": "data/processed/v0/splits/antibody_h3/train.jsonl",
+      "catalog_sha256": "7fff546a39705ebc4c88be42d21d8b6dad3b7f25f2a85e6a638fb37aa4b255a2",
+      "largest_by_cached_atom_count": [],
+      "largest_by_resolved_residues": [
+        {
+          "atom_count": null,
+          "expected_route": "unknown",
+          "resolved_residues": 2594,
+          "sample_id": "sabdab2:pdb_00009mx1_B_C",
+          "source": "sabdab2"
+        },
+        {
+          "atom_count": null,
+          "expected_route": "unknown",
+          "resolved_residues": 2412,
+          "sample_id": "sabdab2:pdb_00007tpr_F_+",
+          "source": "sabdab2"
+        },
+        {
+          "atom_count": null,
+          "expected_route": "unknown",
+          "resolved_residues": 2412,
+          "sample_id": "sabdab2:pdb_00007tpr_H_+",
+          "source": "sabdab2"
+        },
+        {
+          "atom_count": null,
+          "expected_route": "unknown",
+          "resolved_residues": 2048,
+          "sample_id": "sabdab2:pdb_00007m7e_C_D",
+          "source": "sabdab2"
+        },
+        {
+          "atom_count": null,
+          "expected_route": "unknown",
+          "resolved_residues": 1954,
+          "sample_id": "sabdab2:pdb_000011sz_C_D",
+          "source": "sabdab2"
+        },
+        {
+          "atom_count": null,
+          "expected_route": "unknown",
+          "resolved_residues": 1879,
+          "sample_id": "sabdab2:pdb_00009e7x_H_L",
+          "source": "sabdab2"
+        },
+        {
+          "atom_count": null,
+          "expected_route": "unknown",
+          "resolved_residues": 1721,
+          "sample_id": "sabdab2:pdb_00007v3g_G_H",
+          "source": "sabdab2"
+        },
+        {
+          "atom_count": null,
+          "expected_route": "unknown",
+          "resolved_residues": 1720,
+          "sample_id": "sabdab2:pdb_00008y3i_K_L",
+          "source": "sabdab2"
+        },
+        {
+          "atom_count": null,
+          "expected_route": "unknown",
+          "resolved_residues": 1720,
+          "sample_id": "sabdab2:pdb_00008y3l_K_L",
+          "source": "sabdab2"
+        },
+        {
+          "atom_count": null,
+          "expected_route": "unknown",
+          "resolved_residues": 1714,
+          "sample_id": "sabdab2:pdb_00008y3h_K_L",
+          "source": "sabdab2"
+        }
+      ],
+      "resolved_residue_quantiles": {
+        "max": 2594,
+        "min": 125,
+        "p50": 450,
+        "p75": 568,
+        "p90": 680,
+        "p95": 803,
+        "p99": 1261.23
+      },
+      "routing": {
+        "chunked_count": 0,
+        "chunked_fraction_of_cached": null,
+        "chunked_fraction_of_catalog_lower_bound": 0.0,
+        "chunked_fraction_of_catalog_upper_bound": 1.0,
+        "standard_count": 0,
+        "threshold_rule": "standard <= 8008; chunked > 8008",
+        "unknown_uncached_count": 3878
+      },
+      "sample_count": 3878
+    },
+    "protein_binder": {
+      "cache": {
+        "catalog_id_matches": 0,
+        "coverage_count": 0,
+        "coverage_fraction": 0.0,
+        "database": "data/cache/v0/protein_binder/train.sqlite3",
+        "database_rows_at_start": 0,
+        "finalization_status": "missing_or_invalid_sha256_sidecar",
+        "finalized": false,
+        "payload_rows_read": 0,
+        "stale_identity_rows": 0
+      },
+      "cached_atom_count_quantiles": null,
+      "catalog": "data/processed/v0/splits/protein_binder/train.jsonl",
+      "catalog_sha256": "47ce8cfd7270c823d7196239924f1542db46419890f7a53f9beb90a7ad48e988",
+      "largest_by_cached_atom_count": [],
+      "largest_by_resolved_residues": [
+        {
+          "atom_count": null,
+          "expected_route": "unknown",
+          "resolved_residues": 2023,
+          "sample_id": "ppiref50k:6kwy_B_c",
+          "source": "ppiref50k"
+        },
+        {
+          "atom_count": null,
+          "expected_route": "unknown",
+          "resolved_residues": 1296,
+          "sample_id": "ppiref50k:7nky_B_D",
+          "source": "ppiref50k"
+        },
+        {
+          "atom_count": null,
+          "expected_route": "unknown",
+          "resolved_residues": 1274,
+          "sample_id": "ppiref50k:6f1t_e_g",
+          "source": "ppiref50k"
+        },
+        {
+          "atom_count": null,
+          "expected_route": "unknown",
+          "resolved_residues": 1207,
+          "sample_id": "ppiref50k:8imi_0_w",
+          "source": "ppiref50k"
+        },
+        {
+          "atom_count": null,
+          "expected_route": "unknown",
+          "resolved_residues": 1207,
+          "sample_id": "ppiref50k:8imj_0_J",
+          "source": "ppiref50k"
+        },
+        {
+          "atom_count": null,
+          "expected_route": "unknown",
+          "resolved_residues": 1207,
+          "sample_id": "ppiref50k:8imj_0_L",
+          "source": "ppiref50k"
+        },
+        {
+          "atom_count": null,
+          "expected_route": "unknown",
+          "resolved_residues": 1207,
+          "sample_id": "ppiref50k:8imj_0_W",
+          "source": "ppiref50k"
+        },
+        {
+          "atom_count": null,
+          "expected_route": "unknown",
+          "resolved_residues": 1205,
+          "sample_id": "ppiref50k:8imi_0_E",
+          "source": "ppiref50k"
+        },
+        {
+          "atom_count": null,
+          "expected_route": "unknown",
+          "resolved_residues": 1205,
+          "sample_id": "ppiref50k:8imi_0_s",
+          "source": "ppiref50k"
+        },
+        {
+          "atom_count": null,
+          "expected_route": "unknown",
+          "resolved_residues": 1197,
+          "sample_id": "ppiref50k:6sh8_K_Y",
+          "source": "ppiref50k"
+        }
+      ],
+      "resolved_residue_quantiles": {
+        "max": 2023,
+        "min": 8,
+        "p50": 49,
+        "p75": 66,
+        "p90": 94,
+        "p95": 118,
+        "p99": 371
+      },
+      "routing": {
+        "chunked_count": 0,
+        "chunked_fraction_of_cached": null,
+        "chunked_fraction_of_catalog_lower_bound": 0.0,
+        "chunked_fraction_of_catalog_upper_bound": 1.0,
+        "standard_count": 0,
+        "threshold_rule": "standard <= 8008; chunked > 8008",
+        "unknown_uncached_count": 40883
+      },
+      "sample_count": 40883
+    },
+    "rna": {
+      "cache": {
+        "catalog_id_matches": 2117,
+        "coverage_count": 2117,
+        "coverage_fraction": 1.0,
+        "database": "data/cache/v0/rna_aptamer/train.sqlite3",
+        "database_rows_at_start": 2536,
+        "database_sha256": "b33228c9ce4054c60d7623f99329b070633977e2682018cdb1b142fee2b7fea1",
+        "finalization_status": "finalized_sidecar_size_match",
+        "finalized": true,
+        "payload_rows_read": 2117,
+        "stale_identity_rows": 0
+      },
+      "cached_atom_count_quantiles": {
+        "max": 10620,
+        "min": 444,
+        "p50": 6043,
+        "p75": 7032,
+        "p90": 7593.2,
+        "p95": 8044,
+        "p99": 9335.56
+      },
+      "catalog": "data/processed/v0/splits/rna_binding/train.jsonl",
+      "catalog_sha256": "d3a6117d8d35f42a0c73b04978a25c2004d4771170bdf8fcd205dce6eca2feed",
+      "largest_by_cached_atom_count": [
+        {
+          "atom_count": 10620,
+          "expected_route": "chunked",
+          "resolved_residues": 684,
+          "sample_id": "pdb_rna_target:9nln:0",
+          "source": "pdb_rna_target_complex"
+        },
+        {
+          "atom_count": 10068,
+          "expected_route": "chunked",
+          "resolved_residues": 1592,
+          "sample_id": "pdb_rna_target:2xxa:0",
+          "source": "pdb_rna_target_complex"
+        },
+        {
+          "atom_count": 9930,
+          "expected_route": "chunked",
+          "resolved_residues": 991,
+          "sample_id": "pdb_rna_target:8iby:0",
+          "source": "pdb_rna_target_complex"
+        },
+        {
+          "atom_count": 9884,
+          "expected_route": "chunked",
+          "resolved_residues": 629,
+          "sample_id": "pdb_rna_target:11hx:0",
+          "source": "pdb_rna_target_complex"
+        },
+        {
+          "atom_count": 9838,
+          "expected_route": "chunked",
+          "resolved_residues": 688,
+          "sample_id": "pdb_rna_target:9lir:0",
+          "source": "pdb_rna_target_complex"
+        },
+        {
+          "atom_count": 9792,
+          "expected_route": "chunked",
+          "resolved_residues": 1170,
+          "sample_id": "pdb_rna_target:2v3c:0",
+          "source": "pdb_rna_target_complex"
+        },
+        {
+          "atom_count": 9792,
+          "expected_route": "chunked",
+          "resolved_residues": 611,
+          "sample_id": "pdb_rna_target:4xco:0",
+          "source": "pdb_rna_target_complex"
+        },
+        {
+          "atom_count": 9746,
+          "expected_route": "chunked",
+          "resolved_residues": 685,
+          "sample_id": "pdb_rna_target:9liq:0",
+          "source": "pdb_rna_target_complex"
+        },
+        {
+          "atom_count": 9746,
+          "expected_route": "chunked",
+          "resolved_residues": 685,
+          "sample_id": "pdb_rna_target:9lis:0",
+          "source": "pdb_rna_target_complex"
+        },
+        {
+          "atom_count": 9746,
+          "expected_route": "chunked",
+          "resolved_residues": 685,
+          "sample_id": "pdb_rna_target:9lj4:0",
+          "source": "pdb_rna_target_complex"
+        }
+      ],
+      "largest_by_resolved_residues": [
+        {
+          "atom_count": 9102,
+          "expected_route": "chunked",
+          "resolved_residues": 2820,
+          "sample_id": "pdb_rna_target:7wm4:0",
+          "source": "pdb_rna_target_complex"
+        },
+        {
+          "atom_count": 8872,
+          "expected_route": "chunked",
+          "resolved_residues": 2508,
+          "sample_id": "pdb_rna_target:7k98:0",
+          "source": "pdb_rna_target_complex"
+        },
+        {
+          "atom_count": 7216,
+          "expected_route": "standard",
+          "resolved_residues": 2504,
+          "sample_id": "pdb_rna_target:5xuz:0",
+          "source": "pdb_rna_target_complex"
+        },
+        {
+          "atom_count": 6940,
+          "expected_route": "standard",
+          "resolved_residues": 2499,
+          "sample_id": "pdb_rna_target:8y09:0",
+          "source": "pdb_rna_target_complex"
+        },
+        {
+          "atom_count": 6894,
+          "expected_route": "standard",
+          "resolved_residues": 2494,
+          "sample_id": "pdb_rna_target:8y07:0",
+          "source": "pdb_rna_target_complex"
+        },
+        {
+          "atom_count": 8642,
+          "expected_route": "chunked",
+          "resolved_residues": 2477,
+          "sample_id": "pdb_rna_target:9drv:0",
+          "source": "pdb_rna_target_complex"
+        },
+        {
+          "atom_count": 8780,
+          "expected_route": "chunked",
+          "resolved_residues": 2476,
+          "sample_id": "pdb_rna_target:9drt:0",
+          "source": "pdb_rna_target_complex"
+        },
+        {
+          "atom_count": 8734,
+          "expected_route": "chunked",
+          "resolved_residues": 2459,
+          "sample_id": "pdb_rna_target:9dtf:0",
+          "source": "pdb_rna_target_complex"
+        },
+        {
+          "atom_count": 8642,
+          "expected_route": "chunked",
+          "resolved_residues": 2451,
+          "sample_id": "pdb_rna_target:9drs:0",
+          "source": "pdb_rna_target_complex"
+        },
+        {
+          "atom_count": 8734,
+          "expected_route": "chunked",
+          "resolved_residues": 2451,
+          "sample_id": "pdb_rna_target:9dsx:0",
+          "source": "pdb_rna_target_complex"
+        }
+      ],
+      "resolved_residue_quantiles": {
+        "max": 2820,
+        "min": 24,
+        "p50": 661,
+        "p75": 1013,
+        "p90": 1383.8,
+        "p95": 1501.8,
+        "p99": 2200.08
+      },
+      "rna_cached_samples_above_threshold": [
+        {
+          "atom_count": 10620,
+          "expected_route": "chunked",
+          "resolved_residues": 684,
+          "sample_id": "pdb_rna_target:9nln:0",
+          "source": "pdb_rna_target_complex"
+        },
+        {
+          "atom_count": 10068,
+          "expected_route": "chunked",
+          "resolved_residues": 1592,
+          "sample_id": "pdb_rna_target:2xxa:0",
+          "source": "pdb_rna_target_complex"
+        },
+        {
+          "atom_count": 9930,
+          "expected_route": "chunked",
+          "resolved_residues": 991,
+          "sample_id": "pdb_rna_target:8iby:0",
+          "source": "pdb_rna_target_complex"
+        },
+        {
+          "atom_count": 9884,
+          "expected_route": "chunked",
+          "resolved_residues": 629,
+          "sample_id": "pdb_rna_target:11hx:0",
+          "source": "pdb_rna_target_complex"
+        },
+        {
+          "atom_count": 9838,
+          "expected_route": "chunked",
+          "resolved_residues": 688,
+          "sample_id": "pdb_rna_target:9lir:0",
+          "source": "pdb_rna_target_complex"
+        },
+        {
+          "atom_count": 9792,
+          "expected_route": "chunked",
+          "resolved_residues": 1170,
+          "sample_id": "pdb_rna_target:2v3c:0",
+          "source": "pdb_rna_target_complex"
+        },
+        {
+          "atom_count": 9792,
+          "expected_route": "chunked",
+          "resolved_residues": 611,
+          "sample_id": "pdb_rna_target:4xco:0",
+          "source": "pdb_rna_target_complex"
+        },
+        {
+          "atom_count": 9746,
+          "expected_route": "chunked",
+          "resolved_residues": 685,
+          "sample_id": "pdb_rna_target:9liq:0",
+          "source": "pdb_rna_target_complex"
+        },
+        {
+          "atom_count": 9746,
+          "expected_route": "chunked",
+          "resolved_residues": 685,
+          "sample_id": "pdb_rna_target:9lis:0",
+          "source": "pdb_rna_target_complex"
+        },
+        {
+          "atom_count": 9746,
+          "expected_route": "chunked",
+          "resolved_residues": 685,
+          "sample_id": "pdb_rna_target:9lj4:0",
+          "source": "pdb_rna_target_complex"
+        },
+        {
+          "atom_count": 9631,
+          "expected_route": "chunked",
+          "resolved_residues": 661,
+          "sample_id": "pdb_rna_target:11hr:0",
+          "source": "pdb_rna_target_complex"
+        },
+        {
+          "atom_count": 9608,
+          "expected_route": "chunked",
+          "resolved_residues": 581,
+          "sample_id": "pdb_rna_target:7utn:0",
+          "source": "pdb_rna_target_complex"
+        },
+        {
+          "atom_count": 9608,
+          "expected_route": "chunked",
+          "resolved_residues": 678,
+          "sample_id": "pdb_rna_target:8csz:0",
+          "source": "pdb_rna_target_complex"
+        },
+        {
+          "atom_count": 9608,
+          "expected_route": "chunked",
+          "resolved_residues": 585,
+          "sample_id": "pdb_rna_target:8ctl:0",
+          "source": "pdb_rna_target_complex"
+        },
+        {
+          "atom_count": 9585,
+          "expected_route": "chunked",
+          "resolved_residues": 678,
+          "sample_id": "pdb_rna_target:11hu:0",
+          "source": "pdb_rna_target_complex"
+        },
+        {
+          "atom_count": 9562,
+          "expected_route": "chunked",
+          "resolved_residues": 1058,
+          "sample_id": "pdb_rna_target:6mwn:0",
+          "source": "pdb_rna_target_complex"
+        },
+        {
+          "atom_count": 9562,
+          "expected_route": "chunked",
+          "resolved_residues": 712,
+          "sample_id": "pdb_rna_target:9enf:0",
+          "source": "pdb_rna_target_complex"
+        },
+        {
+          "atom_count": 9516,
+          "expected_route": "chunked",
+          "resolved_residues": 997,
+          "sample_id": "pdb_rna_target:8ibz:0",
+          "source": "pdb_rna_target_complex"
+        },
+        {
+          "atom_count": 9493,
+          "expected_route": "chunked",
+          "resolved_residues": 574,
+          "sample_id": "pdb_rna_target:7xht:0",
+          "source": "pdb_rna_target_complex"
+        },
+        {
+          "atom_count": 9424,
+          "expected_route": "chunked",
+          "resolved_residues": 1056,
+          "sample_id": "pdb_rna_target:8vma:0",
+          "source": "pdb_rna_target_complex"
+        },
+        {
+          "atom_count": 9378,
+          "expected_route": "chunked",
+          "resolved_residues": 1041,
+          "sample_id": "pdb_rna_target:7yoj:0",
+          "source": "pdb_rna_target_complex"
+        },
+        {
+          "atom_count": 9345,
+          "expected_route": "chunked",
+          "resolved_residues": 537,
+          "sample_id": "pdb_rna_target:11ic:0",
+          "source": "pdb_rna_target_complex"
+        },
+        {
+          "atom_count": 9286,
+          "expected_route": "chunked",
+          "resolved_residues": 1050,
+          "sample_id": "pdb_rna_target:8vm9:0",
+          "source": "pdb_rna_target_complex"
+        },
+        {
+          "atom_count": 9274,
+          "expected_route": "chunked",
+          "resolved_residues": 521,
+          "sample_id": "pdb_rna_target:4uyj:0",
+          "source": "pdb_rna_target_complex"
+        },
+        {
+          "atom_count": 9263,
+          "expected_route": "chunked",
+          "resolved_residues": 867,
+          "sample_id": "pdb_rna_target:8zmi:0",
+          "source": "pdb_rna_target_complex"
+        },
+        {
+          "atom_count": 9263,
+          "expected_route": "chunked",
+          "resolved_residues": 865,
+          "sample_id": "pdb_rna_target:8zmj:0",
+          "source": "pdb_rna_target_complex"
+        },
+        {
+          "atom_count": 9263,
+          "expected_route": "chunked",
+          "resolved_residues": 867,
+          "sample_id": "pdb_rna_target:8zmk:0",
+          "source": "pdb_rna_target_complex"
+        },
+        {
+          "atom_count": 9240,
+          "expected_route": "chunked",
+          "resolved_residues": 918,
+          "sample_id": "pdb_rna_target:10fc:0",
+          "source": "pdb_rna_target_complex"
+        },
+        {
+          "atom_count": 9171,
+          "expected_route": "chunked",
+          "resolved_residues": 1887,
+          "sample_id": "pdb_rna_target:5on2:0",
+          "source": "pdb_rna_target_complex"
+        },
+        {
+          "atom_count": 9125,
+          "expected_route": "chunked",
+          "resolved_residues": 547,
+          "sample_id": "pdb_rna_target:8iaz:0",
+          "source": "pdb_rna_target_complex"
+        },
+        {
+          "atom_count": 9102,
+          "expected_route": "chunked",
+          "resolved_residues": 2820,
+          "sample_id": "pdb_rna_target:7wm4:0",
+          "source": "pdb_rna_target_complex"
+        },
+        {
+          "atom_count": 9102,
+          "expected_route": "chunked",
+          "resolved_residues": 765,
+          "sample_id": "pdb_rna_target:9nvu:0",
+          "source": "pdb_rna_target_complex"
+        },
+        {
+          "atom_count": 9079,
+          "expected_route": "chunked",
+          "resolved_residues": 1721,
+          "sample_id": "pdb_rna_target:5ah5:0",
+          "source": "pdb_rna_target_complex"
+        },
+        {
+          "atom_count": 9033,
+          "expected_route": "chunked",
+          "resolved_residues": 591,
+          "sample_id": "pdb_rna_target:2r8s:0",
+          "source": "pdb_rna_target_complex"
+        },
+        {
+          "atom_count": 9033,
+          "expected_route": "chunked",
+          "resolved_residues": 548,
+          "sample_id": "pdb_rna_target:9nzp:0",
+          "source": "pdb_rna_target_complex"
+        },
+        {
+          "atom_count": 9010,
+          "expected_route": "chunked",
+          "resolved_residues": 1539,
+          "sample_id": "pdb_rna_target:8p7c:0",
+          "source": "pdb_rna_target_complex"
+        },
+        {
+          "atom_count": 8964,
+          "expected_route": "chunked",
+          "resolved_residues": 1908,
+          "sample_id": "pdb_rna_target:2bte:0",
+          "source": "pdb_rna_target_complex"
+        },
+        {
+          "atom_count": 8941,
+          "expected_route": "chunked",
+          "resolved_residues": 964,
+          "sample_id": "pdb_rna_target:8j12:0",
+          "source": "pdb_rna_target_complex"
+        },
+        {
+          "atom_count": 8941,
+          "expected_route": "chunked",
+          "resolved_residues": 1297,
+          "sample_id": "pdb_rna_target:8p7b:0",
+          "source": "pdb_rna_target_complex"
+        },
+        {
+          "atom_count": 8918,
+          "expected_route": "chunked",
+          "resolved_residues": 782,
+          "sample_id": "pdb_rna_target:2fmt:0",
+          "source": "pdb_rna_target_complex"
+        },
+        {
+          "atom_count": 8895,
+          "expected_route": "chunked",
+          "resolved_residues": 766,
+          "sample_id": "pdb_rna_target:8dzj:0",
+          "source": "pdb_rna_target_complex"
+        },
+        {
+          "atom_count": 8895,
+          "expected_route": "chunked",
+          "resolved_residues": 886,
+          "sample_id": "pdb_rna_target:9k32:0",
+          "source": "pdb_rna_target_complex"
+        },
+        {
+          "atom_count": 8872,
+          "expected_route": "chunked",
+          "resolved_residues": 2508,
+          "sample_id": "pdb_rna_target:7k98:0",
+          "source": "pdb_rna_target_complex"
+        },
+        {
+          "atom_count": 8849,
+          "expected_route": "chunked",
+          "resolved_residues": 835,
+          "sample_id": "pdb_rna_target:9lgi:0",
+          "source": "pdb_rna_target_complex"
+        },
+        {
+          "atom_count": 8803,
+          "expected_route": "chunked",
+          "resolved_residues": 973,
+          "sample_id": "pdb_rna_target:9tq4:0",
+          "source": "pdb_rna_target_complex"
+        },
+        {
+          "atom_count": 8780,
+          "expected_route": "chunked",
+          "resolved_residues": 876,
+          "sample_id": "pdb_rna_target:2deu:0",
+          "source": "pdb_rna_target_complex"
+        },
+        {
+          "atom_count": 8780,
+          "expected_route": "chunked",
+          "resolved_residues": 963,
+          "sample_id": "pdb_rna_target:3wfs:0",
+          "source": "pdb_rna_target_complex"
+        },
+        {
+          "atom_count": 8780,
+          "expected_route": "chunked",
+          "resolved_residues": 2476,
+          "sample_id": "pdb_rna_target:9drt:0",
+          "source": "pdb_rna_target_complex"
+        },
+        {
+          "atom_count": 8757,
+          "expected_route": "chunked",
+          "resolved_residues": 1099,
+          "sample_id": "pdb_rna_target:3wc2:0",
+          "source": "pdb_rna_target_complex"
+        },
+        {
+          "atom_count": 8734,
+          "expected_route": "chunked",
+          "resolved_residues": 1171,
+          "sample_id": "pdb_rna_target:5e6m:0",
+          "source": "pdb_rna_target_complex"
+        },
+        {
+          "atom_count": 8734,
+          "expected_route": "chunked",
+          "resolved_residues": 535,
+          "sample_id": "pdb_rna_target:9auf:0",
+          "source": "pdb_rna_target_complex"
+        },
+        {
+          "atom_count": 8734,
+          "expected_route": "chunked",
+          "resolved_residues": 2451,
+          "sample_id": "pdb_rna_target:9dsx:0",
+          "source": "pdb_rna_target_complex"
+        },
+        {
+          "atom_count": 8734,
+          "expected_route": "chunked",
+          "resolved_residues": 2459,
+          "sample_id": "pdb_rna_target:9dtf:0",
+          "source": "pdb_rna_target_complex"
+        },
+        {
+          "atom_count": 8734,
+          "expected_route": "chunked",
+          "resolved_residues": 804,
+          "sample_id": "pdb_rna_target:9ene:0",
+          "source": "pdb_rna_target_complex"
+        },
+        {
+          "atom_count": 8688,
+          "expected_route": "chunked",
+          "resolved_residues": 1185,
+          "sample_id": "pdb_rna_target:7l48:0",
+          "source": "pdb_rna_target_complex"
+        },
+        {
+          "atom_count": 8688,
+          "expected_route": "chunked",
+          "resolved_residues": 590,
+          "sample_id": "pdb_rna_target:8zdr:0",
+          "source": "pdb_rna_target_complex"
+        },
+        {
+          "atom_count": 8688,
+          "expected_route": "chunked",
+          "resolved_residues": 811,
+          "sample_id": "pdb_rna_target:9c2k:0",
+          "source": "pdb_rna_target_complex"
+        },
+        {
+          "atom_count": 8688,
+          "expected_route": "chunked",
+          "resolved_residues": 811,
+          "sample_id": "pdb_rna_target:9e7d:0",
+          "source": "pdb_rna_target_complex"
+        },
+        {
+          "atom_count": 8688,
+          "expected_route": "chunked",
+          "resolved_residues": 780,
+          "sample_id": "pdb_rna_target:9enb:0",
+          "source": "pdb_rna_target_complex"
+        },
+        {
+          "atom_count": 8665,
+          "expected_route": "chunked",
+          "resolved_residues": 740,
+          "sample_id": "pdb_rna_target:2zm5:0",
+          "source": "pdb_rna_target_complex"
+        },
+        {
+          "atom_count": 8665,
+          "expected_route": "chunked",
+          "resolved_residues": 754,
+          "sample_id": "pdb_rna_target:2zxu:0",
+          "source": "pdb_rna_target_complex"
+        },
+        {
+          "atom_count": 8665,
+          "expected_route": "chunked",
+          "resolved_residues": 751,
+          "sample_id": "pdb_rna_target:3foz:0",
+          "source": "pdb_rna_target_complex"
+        },
+        {
+          "atom_count": 8665,
+          "expected_route": "chunked",
+          "resolved_residues": 1179,
+          "sample_id": "pdb_rna_target:6jdv:0",
+          "source": "pdb_rna_target_complex"
+        },
+        {
+          "atom_count": 8642,
+          "expected_route": "chunked",
+          "resolved_residues": 813,
+          "sample_id": "pdb_rna_target:2zzn:0",
+          "source": "pdb_rna_target_complex"
+        },
+        {
+          "atom_count": 8642,
+          "expected_route": "chunked",
+          "resolved_residues": 2451,
+          "sample_id": "pdb_rna_target:9drs:0",
+          "source": "pdb_rna_target_complex"
+        },
+        {
+          "atom_count": 8642,
+          "expected_route": "chunked",
+          "resolved_residues": 2477,
+          "sample_id": "pdb_rna_target:9drv:0",
+          "source": "pdb_rna_target_complex"
+        },
+        {
+          "atom_count": 8596,
+          "expected_route": "chunked",
+          "resolved_residues": 856,
+          "sample_id": "pdb_rna_target:5hr7:0",
+          "source": "pdb_rna_target_complex"
+        },
+        {
+          "atom_count": 8596,
+          "expected_route": "chunked",
+          "resolved_residues": 722,
+          "sample_id": "pdb_rna_target:8okd:0",
+          "source": "pdb_rna_target_complex"
+        },
+        {
+          "atom_count": 8550,
+          "expected_route": "chunked",
+          "resolved_residues": 525,
+          "sample_id": "pdb_rna_target:6lvr:0",
+          "source": "pdb_rna_target_complex"
+        },
+        {
+          "atom_count": 8527,
+          "expected_route": "chunked",
+          "resolved_residues": 662,
+          "sample_id": "pdb_rna_target:8w2z:0",
+          "source": "pdb_rna_target_complex"
+        },
+        {
+          "atom_count": 8504,
+          "expected_route": "chunked",
+          "resolved_residues": 643,
+          "sample_id": "pdb_rna_target:3ndb:0",
+          "source": "pdb_rna_target_complex"
+        },
+        {
+          "atom_count": 8504,
+          "expected_route": "chunked",
+          "resolved_residues": 1913,
+          "sample_id": "pdb_rna_target:8ygj:0",
+          "source": "pdb_rna_target_complex"
+        },
+        {
+          "atom_count": 8504,
+          "expected_route": "chunked",
+          "resolved_residues": 781,
+          "sample_id": "pdb_rna_target:9lpc:0",
+          "source": "pdb_rna_target_complex"
+        },
+        {
+          "atom_count": 8481,
+          "expected_route": "chunked",
+          "resolved_residues": 1176,
+          "sample_id": "pdb_rna_target:7l49:0",
+          "source": "pdb_rna_target_complex"
+        },
+        {
+          "atom_count": 8458,
+          "expected_route": "chunked",
+          "resolved_residues": 840,
+          "sample_id": "pdb_rna_target:5hr6:0",
+          "source": "pdb_rna_target_complex"
+        },
+        {
+          "atom_count": 8458,
+          "expected_route": "chunked",
+          "resolved_residues": 565,
+          "sample_id": "pdb_rna_target:9jfp:0",
+          "source": "pdb_rna_target_complex"
+        },
+        {
+          "atom_count": 8435,
+          "expected_route": "chunked",
+          "resolved_residues": 740,
+          "sample_id": "pdb_rna_target:7wju:0",
+          "source": "pdb_rna_target_complex"
+        },
+        {
+          "atom_count": 8412,
+          "expected_route": "chunked",
+          "resolved_residues": 860,
+          "sample_id": "pdb_rna_target:9nzs:0",
+          "source": "pdb_rna_target_complex"
+        },
+        {
+          "atom_count": 8389,
+          "expected_route": "chunked",
+          "resolved_residues": 562,
+          "sample_id": "pdb_rna_target:9jfo:0",
+          "source": "pdb_rna_target_complex"
+        },
+        {
+          "atom_count": 8366,
+          "expected_route": "chunked",
+          "resolved_residues": 1166,
+          "sample_id": "pdb_rna_target:6kc8:0",
+          "source": "pdb_rna_target_complex"
+        },
+        {
+          "atom_count": 8343,
+          "expected_route": "chunked",
+          "resolved_residues": 1018,
+          "sample_id": "pdb_rna_target:9nzr:0",
+          "source": "pdb_rna_target_complex"
+        },
+        {
+          "atom_count": 8320,
+          "expected_route": "chunked",
+          "resolved_residues": 565,
+          "sample_id": "pdb_rna_target:3ivk:0",
+          "source": "pdb_rna_target_complex"
+        },
+        {
+          "atom_count": 8320,
+          "expected_route": "chunked",
+          "resolved_residues": 565,
+          "sample_id": "pdb_rna_target:3ivk:1",
+          "source": "pdb_rna_target_complex"
+        },
+        {
+          "atom_count": 8320,
+          "expected_route": "chunked",
+          "resolved_residues": 878,
+          "sample_id": "pdb_rna_target:9nzq:0",
+          "source": "pdb_rna_target_complex"
+        },
+        {
+          "atom_count": 8297,
+          "expected_route": "chunked",
+          "resolved_residues": 1373,
+          "sample_id": "pdb_rna_target:8wt6:0",
+          "source": "pdb_rna_target_complex"
+        },
+        {
+          "atom_count": 8297,
+          "expected_route": "chunked",
+          "resolved_residues": 1373,
+          "sample_id": "pdb_rna_target:8wt7:0",
+          "source": "pdb_rna_target_complex"
+        },
+        {
+          "atom_count": 8297,
+          "expected_route": "chunked",
+          "resolved_residues": 1373,
+          "sample_id": "pdb_rna_target:8wt8:0",
+          "source": "pdb_rna_target_complex"
+        },
+        {
+          "atom_count": 8297,
+          "expected_route": "chunked",
+          "resolved_residues": 1385,
+          "sample_id": "pdb_rna_target:8wt9:0",
+          "source": "pdb_rna_target_complex"
+        },
+        {
+          "atom_count": 8274,
+          "expected_route": "chunked",
+          "resolved_residues": 1905,
+          "sample_id": "pdb_rna_target:8wuv:0",
+          "source": "pdb_rna_target_complex"
+        },
+        {
+          "atom_count": 8251,
+          "expected_route": "chunked",
+          "resolved_residues": 558,
+          "sample_id": "pdb_rna_target:8zq9:0",
+          "source": "pdb_rna_target_complex"
+        },
+        {
+          "atom_count": 8251,
+          "expected_route": "chunked",
+          "resolved_residues": 1375,
+          "sample_id": "pdb_rna_target:9why:0",
+          "source": "pdb_rna_target_complex"
+        },
+        {
+          "atom_count": 8228,
+          "expected_route": "chunked",
+          "resolved_residues": 1377,
+          "sample_id": "pdb_rna_target:9t56:0",
+          "source": "pdb_rna_target_complex"
+        },
+        {
+          "atom_count": 8205,
+          "expected_route": "chunked",
+          "resolved_residues": 1142,
+          "sample_id": "pdb_rna_target:9ar4:0",
+          "source": "pdb_rna_target_complex"
+        },
+        {
+          "atom_count": 8182,
+          "expected_route": "chunked",
+          "resolved_residues": 720,
+          "sample_id": "pdb_rna_target:9nzt:0",
+          "source": "pdb_rna_target_complex"
+        },
+        {
+          "atom_count": 8159,
+          "expected_route": "chunked",
+          "resolved_residues": 1081,
+          "sample_id": "pdb_rna_target:7wb1:0",
+          "source": "pdb_rna_target_complex"
+        },
+        {
+          "atom_count": 8159,
+          "expected_route": "chunked",
+          "resolved_residues": 1497,
+          "sample_id": "pdb_rna_target:8umf:0",
+          "source": "pdb_rna_target_complex"
+        },
+        {
+          "atom_count": 8159,
+          "expected_route": "chunked",
+          "resolved_residues": 1350,
+          "sample_id": "pdb_rna_target:9kor:0",
+          "source": "pdb_rna_target_complex"
+        },
+        {
+          "atom_count": 8136,
+          "expected_route": "chunked",
+          "resolved_residues": 1184,
+          "sample_id": "pdb_rna_target:9ar6:0",
+          "source": "pdb_rna_target_complex"
+        },
+        {
+          "atom_count": 8136,
+          "expected_route": "chunked",
+          "resolved_residues": 1139,
+          "sample_id": "pdb_rna_target:9ar7:0",
+          "source": "pdb_rna_target_complex"
+        },
+        {
+          "atom_count": 8113,
+          "expected_route": "chunked",
+          "resolved_residues": 813,
+          "sample_id": "pdb_rna_target:9nzo:0",
+          "source": "pdb_rna_target_complex"
+        },
+        {
+          "atom_count": 8090,
+          "expected_route": "chunked",
+          "resolved_residues": 1464,
+          "sample_id": "pdb_rna_target:8kag:0",
+          "source": "pdb_rna_target_complex"
+        },
+        {
+          "atom_count": 8090,
+          "expected_route": "chunked",
+          "resolved_residues": 1372,
+          "sample_id": "pdb_rna_target:9whx:0",
+          "source": "pdb_rna_target_complex"
+        },
+        {
+          "atom_count": 8067,
+          "expected_route": "chunked",
+          "resolved_residues": 1186,
+          "sample_id": "pdb_rna_target:6jdq:0",
+          "source": "pdb_rna_target_complex"
+        },
+        {
+          "atom_count": 8067,
+          "expected_route": "chunked",
+          "resolved_residues": 975,
+          "sample_id": "pdb_rna_target:6je3:0",
+          "source": "pdb_rna_target_complex"
+        },
+        {
+          "atom_count": 8067,
+          "expected_route": "chunked",
+          "resolved_residues": 583,
+          "sample_id": "pdb_rna_target:9b0l:0",
+          "source": "pdb_rna_target_complex"
+        },
+        {
+          "atom_count": 8044,
+          "expected_route": "chunked",
+          "resolved_residues": 999,
+          "sample_id": "pdb_rna_target:6xjq:0",
+          "source": "pdb_rna_target_complex"
+        },
+        {
+          "atom_count": 8044,
+          "expected_route": "chunked",
+          "resolved_residues": 999,
+          "sample_id": "pdb_rna_target:6xjw:0",
+          "source": "pdb_rna_target_complex"
+        },
+        {
+          "atom_count": 8044,
+          "expected_route": "chunked",
+          "resolved_residues": 991,
+          "sample_id": "pdb_rna_target:7c7l:0",
+          "source": "pdb_rna_target_complex"
+        },
+        {
+          "atom_count": 8044,
+          "expected_route": "chunked",
+          "resolved_residues": 720,
+          "sample_id": "pdb_rna_target:9rw6:0",
+          "source": "pdb_rna_target_complex"
+        },
+        {
+          "atom_count": 8021,
+          "expected_route": "chunked",
+          "resolved_residues": 1477,
+          "sample_id": "pdb_rna_target:5f9r:0",
+          "source": "pdb_rna_target_complex"
+        },
+        {
+          "atom_count": 8021,
+          "expected_route": "chunked",
+          "resolved_residues": 1479,
+          "sample_id": "pdb_rna_target:5vzl:0",
+          "source": "pdb_rna_target_complex"
+        },
+        {
+          "atom_count": 8021,
+          "expected_route": "chunked",
+          "resolved_residues": 1097,
+          "sample_id": "pdb_rna_target:5wti:0",
+          "source": "pdb_rna_target_complex"
+        },
+        {
+          "atom_count": 8021,
+          "expected_route": "chunked",
+          "resolved_residues": 1171,
+          "sample_id": "pdb_rna_target:6je9:0",
+          "source": "pdb_rna_target_complex"
+        },
+        {
+          "atom_count": 8021,
+          "expected_route": "chunked",
+          "resolved_residues": 1602,
+          "sample_id": "pdb_rna_target:6mcb:0",
+          "source": "pdb_rna_target_complex"
+        },
+        {
+          "atom_count": 8021,
+          "expected_route": "chunked",
+          "resolved_residues": 1609,
+          "sample_id": "pdb_rna_target:6mcc:0",
+          "source": "pdb_rna_target_complex"
+        },
+        {
+          "atom_count": 8021,
+          "expected_route": "chunked",
+          "resolved_residues": 1075,
+          "sample_id": "pdb_rna_target:7way:0",
+          "source": "pdb_rna_target_complex"
+        },
+        {
+          "atom_count": 8021,
+          "expected_route": "chunked",
+          "resolved_residues": 1067,
+          "sample_id": "pdb_rna_target:7waz:0",
+          "source": "pdb_rna_target_complex"
+        },
+        {
+          "atom_count": 8021,
+          "expected_route": "chunked",
+          "resolved_residues": 912,
+          "sample_id": "pdb_rna_target:7wb0:0",
+          "source": "pdb_rna_target_complex"
+        },
+        {
+          "atom_count": 8021,
+          "expected_route": "chunked",
+          "resolved_residues": 1229,
+          "sample_id": "pdb_rna_target:8ja0:0",
+          "source": "pdb_rna_target_complex"
+        },
+        {
+          "atom_count": 8021,
+          "expected_route": "chunked",
+          "resolved_residues": 1881,
+          "sample_id": "pdb_rna_target:8wus:0",
+          "source": "pdb_rna_target_complex"
+        }
+      ],
+      "routing": {
+        "chunked_count": 120,
+        "chunked_fraction_of_cached": 0.056684,
+        "chunked_fraction_of_catalog_lower_bound": 0.056684,
+        "chunked_fraction_of_catalog_upper_bound": 0.056684,
+        "standard_count": 1997,
+        "threshold_rule": "standard <= 8008; chunked > 8008",
+        "unknown_uncached_count": 0
+      },
+      "sample_count": 2117
+    }
+  }
+}
