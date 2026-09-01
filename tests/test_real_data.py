@@ -130,3 +130,7 @@ def test_microheterogeneous_rna_residue_uses_catalog_sequence_and_accepted_altlo
     assert int(example.design_mask.sum()) == rna["resolved_residues"]
     assert int(batch["ground_truth_sequence_mask"].sum()) == rna["resolved_residues"]
     assert bool(batch["ground_truth_atom_mask"].any())
+    atom_to_token = batch["f"]["atom_to_token_map"].long()
+    design_atoms = batch["ground_truth_sequence_mask"][atom_to_token]
+    assert bool(batch["ground_truth_atom_mask"][design_atoms].any())
+    assert bool(batch["ground_truth_atom_mask"][~design_atoms].any())

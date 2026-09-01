@@ -233,8 +233,16 @@ def _sample_diffusion(template: dict[str, Any], spec: FeatureCacheSpec) -> dict[
     """Recreate the loader's EDM t/noise fields from a deterministic cached template."""
 
     def sample() -> dict[str, Any]:
+        working = _copy_containers(template)
+        # The occupancy mask is derivable exactly from Foundry's persisted
+        # ``is_virtual`` feature.  Re-derive it on every read so caches built before
+        # the fixed-context supervision correction remain scientifically identical
+        # to fresh preprocessing without reparsing every CIF.
+        features = working.get("f")
+        if isinstance(features, dict) and isinstance(features.get("is_virtual"), torch.Tensor):
+            working["ground_truth_atom_mask"] = ~features["is_virtual"].bool()
         return sample_foundry_training_diffusion(
-            _copy_containers(template),
+            working,
             diffusion_batch_size=spec.diffusion_batch_size,
             noise_level=spec.noise_level,
             augment_coordinates=spec.augment_coordinates,

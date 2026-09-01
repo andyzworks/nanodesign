@@ -13,6 +13,7 @@ from nanodesign.v0.training import (
     TrainingConfig,
     _assert_model_matches_resolved_config,
     _design_normalized_sequence_mask,
+    _official_generation_coordinates,
     build_optimizer,
     capture_rng_state,
     load_checkpoint,
@@ -34,6 +35,27 @@ def test_sequence_mask_is_normalized_over_design_tokens_only():
     assert torch.isclose((weights * token_losses).mean(), torch.tensor(2.0))
     with pytest.raises(ValueError, match="at least one"):
         _design_normalized_sequence_mask(torch.zeros(3, dtype=torch.bool))
+
+
+def test_regular_generation_centers_fixed_context_and_removes_native_design_coordinates():
+    batch = {
+        "coord_atom_lvl_to_be_noised": torch.tensor(
+            [[[10.0, 2.0, 0.0], [14.0, 2.0, 0.0], [99.0, 99.0, 99.0]]]
+        ),
+        "f": {
+            "is_motif_atom_with_fixed_coord": torch.tensor([True, True, False]),
+            "is_virtual": torch.tensor([False, False, False]),
+        },
+    }
+    coordinates = _official_generation_coordinates(batch)
+    assert torch.equal(
+        coordinates,
+        torch.tensor([[[-2.0, 0.0, 0.0], [2.0, 0.0, 0.0], [0.0, 0.0, 0.0]]]),
+    )
+    # The cached/native batch is immutable so validation and future noising remain exact.
+    assert torch.equal(
+        batch["coord_atom_lvl_to_be_noised"][0, 2], torch.tensor([99.0, 99.0, 99.0])
+    )
 
 
 def test_runtime_model_config_must_match_resolved_train_and_inference_config():

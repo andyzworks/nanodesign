@@ -42,6 +42,7 @@ def _batch(sample_id: str = "sabdab2:fixed_H_L") -> dict:
         "f": {
             "restype": torch.zeros(token_count, 32, dtype=torch.long),
             "atom_to_token_map": torch.arange(atom_count, dtype=torch.int32) // 14,
+            "is_virtual": torch.zeros(atom_count, dtype=torch.bool),
         },
         "X_noisy_L": torch.arange(atom_count * 3, dtype=torch.float32).reshape(1, atom_count, 3),
         "t": torch.tensor([0.5]),
@@ -88,6 +89,7 @@ def test_sqlite_cache_roundtrip_binds_identity_and_exact_tensors(tmp_path):
     with SQLiteFeatureCache(tmp_path, readonly=True, lru_size=2) as cache:
         cached = cache.get(row, spec)
         assert model_ready_batches_equal(cached, cache.get(row, spec))
+        assert bool(cached["ground_truth_atom_mask"].all())
         with pytest.raises(FeatureCacheError, match="stale"):
             cache.get(row, _spec(manifest_sha256="b" * 64))
 

@@ -590,7 +590,12 @@ def load_foundry_training_example(
         "task": row["task"],
         "f": feats,
         "ground_truth_positions": positions.unsqueeze(0),
-        "ground_truth_atom_mask": real_atom_mask & atom_design,
+        # Match Foundry's AF3 feature aggregation exactly: the diffusion loss mask is
+        # the occupancy mask for every atom, including fixed motif/context atoms.
+        # Fixed atoms receive no noise, but supervising their identity mapping is what
+        # teaches the sampler to keep the supplied molecular context fixed.  Sequence
+        # supervision remains restricted to the NanoDesign design region below.
+        "ground_truth_atom_mask": real_atom_mask,
         "ground_truth_sequence": native_restype,
         "ground_truth_sequence_mask": token_design,
         "coord_atom_lvl_to_be_noised": positions.unsqueeze(0),
@@ -643,7 +648,9 @@ def sample_foundry_training_diffusion(
     atom_design = token_design[atom_to_token]
     if augment_coordinates:
         # Pinned RFD3NA defaults: center_option=diffuse and sigma_perturb=2.0.
-        center_mask = batch["ground_truth_atom_mask"].bool()
+        # Foundry's training center_option=diffuse centers on resolved atoms in the
+        # diffused region, not on all atoms covered by the coordinate-loss mask.
+        center_mask = batch["ground_truth_atom_mask"].bool() & atom_design
         if not bool(center_mask.any()):
             raise ValueError("coordinate augmentation requires resolved design atoms")
         clean = clean - base[center_mask].mean(dim=0)
