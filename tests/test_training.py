@@ -26,6 +26,8 @@ from nanodesign.v0.training import (
 def test_training_config_rejects_invalid_optimizer_values():
     with pytest.raises(ValueError, match="invalid"):
         TrainingConfig(learning_rate=0)
+    with pytest.raises(ValueError, match="invalid"):
+        TrainingConfig(gradient_clip=0)
 
 
 def test_sequence_mask_is_normalized_over_design_tokens_only():

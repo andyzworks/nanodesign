@@ -344,6 +344,15 @@ def main() -> None:
     parser.add_argument("--weight-decay", type=float, default=1e-4)
     parser.add_argument("--adam-beta2", type=float, default=0.95)
     parser.add_argument(
+        "--gradient-clip",
+        type=float,
+        default=1.0,
+        help=(
+            "global gradient-norm ceiling; 1.0 preserves the existing NanoDesign "
+            "control and 10.0 matches the pinned public RFD3NA trainer"
+        ),
+    )
+    parser.add_argument(
         "--ema-decay",
         type=float,
         default=0.999,
@@ -430,6 +439,7 @@ def main() -> None:
     training_config = TrainingConfig(
         learning_rate=args.learning_rate,
         weight_decay=args.weight_decay,
+        gradient_clip=args.gradient_clip,
         adam_beta2=args.adam_beta2,
     )
     optimizer = build_optimizer(base_model, training_config)
@@ -481,6 +491,7 @@ def main() -> None:
         "size_packing_version": SIZE_PACKING_VERSION,
         "learning_rate": training_config.learning_rate,
         "weight_decay": training_config.weight_decay,
+        "gradient_clip": training_config.gradient_clip,
         "adam_betas": [training_config.adam_beta1, training_config.adam_beta2],
         "ema_decay": args.ema_decay,
         "coordinate_augmentation": args.coordinate_augmentation,
@@ -896,6 +907,7 @@ def main() -> None:
             "optimizer": "AdamW",
             "learning_rate": training_config.learning_rate,
             "weight_decay": training_config.weight_decay,
+            "gradient_clip": training_config.gradient_clip,
             "adam_betas": [training_config.adam_beta1, training_config.adam_beta2],
             "ema_decay": args.ema_decay,
             "validation_and_generation_weights": "ema" if ema is not None else "online",
