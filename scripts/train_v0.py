@@ -44,6 +44,7 @@ from nanodesign.v0.model import STANDARD_MODE_MAX_ATOMS, NanoDesignTiny, NanoDes
 from nanodesign.v0.training import (
     ExponentialMovingAverage,
     TrainingConfig,
+    build_learning_rate_scheduler,
     build_optimizer,
     capture_rng_state,
     evaluate_loss,
@@ -341,6 +342,12 @@ def main() -> None:
     parser.add_argument("--data-prefetch-factor", type=int, default=4)
     parser.add_argument("--data-pin-memory", action=argparse.BooleanOptionalAction, default=True)
     parser.add_argument("--learning-rate", type=float, default=2e-4)
+    parser.add_argument(
+        "--lr-schedule",
+        choices=("constant", "af3"),
+        default="constant",
+        help="constant control or the pinned public RFD3NA AF3 warmup/decay schedule",
+    )
     parser.add_argument("--weight-decay", type=float, default=1e-4)
     parser.add_argument("--adam-beta2", type=float, default=0.95)
     parser.add_argument(
@@ -443,6 +450,11 @@ def main() -> None:
         adam_beta2=args.adam_beta2,
     )
     optimizer = build_optimizer(base_model, training_config)
+    lr_scheduler = build_learning_rate_scheduler(
+        optimizer,
+        schedule=args.lr_schedule,
+        base_learning_rate=training_config.learning_rate,
+    )
     ema = (
         ExponentialMovingAverage(base_model, decay=args.ema_decay)
         if args.ema_decay > 0.0
@@ -490,6 +502,10 @@ def main() -> None:
         "feature_cache_enabled": args.feature_cache_root is not None,
         "size_packing_version": SIZE_PACKING_VERSION,
         "learning_rate": training_config.learning_rate,
+        "lr_schedule": args.lr_schedule,
+        "lr_warmup_steps": 1000 if args.lr_schedule == "af3" else 0,
+        "lr_decay_factor": 0.95 if args.lr_schedule == "af3" else 1.0,
+        "lr_decay_steps": 50000 if args.lr_schedule == "af3" else 0,
         "weight_decay": training_config.weight_decay,
         "gradient_clip": training_config.gradient_clip,
         "adam_betas": [training_config.adam_beta1, training_config.adam_beta2],
@@ -502,6 +518,7 @@ def main() -> None:
             args.resume,
             model=base_model,
             optimizer=optimizer,
+            lr_scheduler=lr_scheduler,
             expected_manifest_sha256=manifest_sha,
             restore_rng=True,
             rng_rank=distributed.rank,
@@ -649,6 +666,7 @@ def main() -> None:
                 path,
                 model=base_model,
                 optimizer=optimizer,
+                lr_scheduler=lr_scheduler,
                 step=completed_step,
                 samples_seen=samples_seen,
                 task_cursors=cursors,
@@ -790,9 +808,23 @@ def main() -> None:
         base_model.execution_mode = synchronized_mode
         if device.type == "cuda":
             with torch.autocast(device_type="cuda", dtype=torch.bfloat16):
-                metrics = train_step(model, optimizer, batch, training_config, ema)
+                metrics = train_step(
+                    model,
+                    optimizer,
+                    batch,
+                    training_config,
+                    ema,
+                    lr_scheduler,
+                )
         else:
-            metrics = train_step(model, optimizer, batch, training_config, ema)
+            metrics = train_step(
+                model,
+                optimizer,
+                batch,
+                training_config,
+                ema,
+                lr_scheduler,
+            )
         metrics = reduce_scalar_metrics(metrics, device=device, world_size=distributed.world_size)
         sample_ids = all_gather_objects(row["sample_id"], distributed.world_size)
         local_execution_mode = getattr(base_model, "last_execution_mode", "standard")
@@ -906,6 +938,11 @@ def main() -> None:
             "generation_origin": "foundry_fixed_motif_com_with_zeroed_design_coordinates",
             "optimizer": "AdamW",
             "learning_rate": training_config.learning_rate,
+            "lr_schedule": args.lr_schedule,
+            "lr_warmup_steps": 1000 if args.lr_schedule == "af3" else 0,
+            "lr_decay_factor": 0.95 if args.lr_schedule == "af3" else 1.0,
+            "lr_decay_steps": 50000 if args.lr_schedule == "af3" else 0,
+            "final_learning_rate": float(optimizer.param_groups[0]["lr"]),
             "weight_decay": training_config.weight_decay,
             "gradient_clip": training_config.gradient_clip,
             "adam_betas": [training_config.adam_beta1, training_config.adam_beta2],

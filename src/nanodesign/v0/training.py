@@ -116,6 +116,7 @@ def train_step(
     batch: Mapping[str, object],
     config: TrainingConfig | None = None,
     ema: ExponentialMovingAverage | None = None,
+    lr_scheduler: torch.optim.lr_scheduler.LRScheduler | None = None,
 ) -> dict[str, float]:
     """Run one step with the public RFD3NA diffusion and sequence losses."""
 
@@ -132,6 +133,8 @@ def train_step(
     if not torch.isfinite(gradient_norm):
         raise FloatingPointError("non-finite RFD3NA gradient norm")
     optimizer.step()
+    if lr_scheduler is not None:
+        lr_scheduler.step()
     if ema is not None:
         unwrapped = model.module if hasattr(model, "module") else model
         ema.update(unwrapped)
@@ -139,7 +142,11 @@ def train_step(
         key: float(value.detach().item())
         for key, value in metrics.items()
         if isinstance(value, torch.Tensor) and value.numel() == 1 and torch.isfinite(value)
-    } | {"loss": float(loss.detach().item()), "gradient_norm": float(gradient_norm)}
+    } | {
+        "loss": float(loss.detach().item()),
+        "gradient_norm": float(gradient_norm),
+        "learning_rate": float(optimizer.param_groups[0]["lr"]),
+    }
 
 
 def _compute_rfd3na_loss(
@@ -465,6 +472,33 @@ def build_optimizer(
     )
 
 
+def build_learning_rate_scheduler(
+    optimizer: torch.optim.Optimizer,
+    *,
+    schedule: str,
+    base_learning_rate: float,
+) -> torch.optim.lr_scheduler.LRScheduler | None:
+    """Build the unchanged constant path or the pinned public RFD3NA schedule."""
+
+    if schedule == "constant":
+        return None
+    if schedule != "af3":
+        raise ValueError("learning-rate schedule must be constant or af3")
+    if base_learning_rate <= 0:
+        raise ValueError("scheduler base learning rate must be positive")
+    try:
+        from foundry.training.schedulers import AF3Scheduler
+    except ImportError as error:
+        raise ImportError("AF3 scheduling requires the project 'model' extra") from error
+    return AF3Scheduler(
+        optimizer,
+        base_lr=base_learning_rate,
+        warmup_steps=1000,
+        decay_factor=0.95,
+        decay_steps=50000,
+    )
+
+
 def _require_sha256(value: str, name: str) -> None:
     if len(value) != 64:
         raise ValueError(f"{name} must contain 64 hexadecimal characters")
@@ -517,6 +551,7 @@ def save_checkpoint(
     *,
     model: NanoDesignTiny,
     optimizer: torch.optim.Optimizer,
+    lr_scheduler: torch.optim.lr_scheduler.LRScheduler | None = None,
     step: int,
     manifest_sha256: str,
     resolved_config: Mapping[str, object],
@@ -551,6 +586,7 @@ def save_checkpoint(
         "model": model.state_dict(),
         "ema": ema.state_dict() if ema is not None else None,
         "optimizer": optimizer.state_dict(),
+        "lr_scheduler": lr_scheduler.state_dict() if lr_scheduler is not None else None,
         "step": step,
         "samples_seen": samples_seen,
         "task_cursors": dict(task_cursors or {}),
@@ -580,6 +616,7 @@ def load_checkpoint(
     *,
     model: NanoDesignTiny,
     optimizer: torch.optim.Optimizer | None = None,
+    lr_scheduler: torch.optim.lr_scheduler.LRScheduler | None = None,
     expected_manifest_sha256: str | None = None,
     restore_rng: bool = False,
     rng_rank: int = 0,
@@ -627,6 +664,13 @@ def load_checkpoint(
         checkpoint["loaded_weight_source"] = "online"
     if optimizer is not None:
         optimizer.load_state_dict(checkpoint["optimizer"])
+        scheduler_state = checkpoint.get("lr_scheduler")
+        if lr_scheduler is not None:
+            if not isinstance(scheduler_state, Mapping):
+                raise ValueError("checkpoint is missing the requested learning-rate scheduler")
+            lr_scheduler.load_state_dict(scheduler_state)
+        elif scheduler_state is not None:
+            raise ValueError("checkpoint uses a learning-rate scheduler but runtime does not")
     if restore_rng:
         ranked_states = checkpoint.get("rng_states_by_rank")
         if ranked_states:

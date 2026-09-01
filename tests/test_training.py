@@ -14,6 +14,7 @@ from nanodesign.v0.training import (
     _assert_model_matches_resolved_config,
     _design_normalized_sequence_mask,
     _official_generation_coordinates,
+    build_learning_rate_scheduler,
     build_optimizer,
     capture_rng_state,
     load_checkpoint,
@@ -28,6 +29,26 @@ def test_training_config_rejects_invalid_optimizer_values():
         TrainingConfig(learning_rate=0)
     with pytest.raises(ValueError, match="invalid"):
         TrainingConfig(gradient_clip=0)
+
+
+def test_pinned_af3_scheduler_uses_official_warmup_and_constant_path_is_unchanged():
+    model = _CheckpointModel()
+    optimizer = build_optimizer(model, TrainingConfig(learning_rate=1.8e-3))
+    assert build_learning_rate_scheduler(
+        optimizer, schedule="constant", base_learning_rate=1.8e-3
+    ) is None
+    scheduler = build_learning_rate_scheduler(
+        optimizer, schedule="af3", base_learning_rate=1.8e-3
+    )
+    assert scheduler is not None
+    assert optimizer.param_groups[0]["lr"] == 0.0
+    optimizer.step()
+    scheduler.step()
+    assert optimizer.param_groups[0]["lr"] == pytest.approx(1.8e-6)
+    with pytest.raises(ValueError, match="constant or af3"):
+        build_learning_rate_scheduler(
+            optimizer, schedule="cosine", base_learning_rate=1.8e-3
+        )
 
 
 def test_sequence_mask_is_normalized_over_design_tokens_only():
@@ -192,6 +213,48 @@ def test_checkpoint_resume_matches_uninterrupted_stochastic_training(tmp_path):
     _assert_nested_equal(continuous_next_rng, resumed_next_rng)
     assert loaded["samples_seen"] == interrupted_at
     assert loaded["task_cursors"] == {"protein_binder": 1, "antibody_h3": 1, "rna": 0}
+
+
+def test_checkpoint_restores_learning_rate_scheduler_state(tmp_path):
+    resolved = load_config("configs/v0.yaml")
+    model = _CheckpointModel()
+    optimizer = build_optimizer(model)
+    scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=1, gamma=0.5)
+    optimizer.step()
+    scheduler.step()
+    path = tmp_path / "scheduled.pt"
+    save_checkpoint(
+        path,
+        model=model,
+        optimizer=optimizer,
+        lr_scheduler=scheduler,
+        step=1,
+        manifest_sha256="c" * 64,
+        resolved_config=resolved,
+    )
+
+    restored_model = _CheckpointModel()
+    restored_optimizer = build_optimizer(restored_model)
+    restored_scheduler = torch.optim.lr_scheduler.StepLR(
+        restored_optimizer, step_size=1, gamma=0.5
+    )
+    load_checkpoint(
+        path,
+        model=restored_model,
+        optimizer=restored_optimizer,
+        lr_scheduler=restored_scheduler,
+        expected_manifest_sha256="c" * 64,
+    )
+    _assert_nested_equal(scheduler.state_dict(), restored_scheduler.state_dict())
+    assert restored_optimizer.param_groups[0]["lr"] == optimizer.param_groups[0]["lr"]
+
+    with pytest.raises(ValueError, match="runtime does not"):
+        load_checkpoint(
+            path,
+            model=_CheckpointModel(),
+            optimizer=build_optimizer(_CheckpointModel()),
+            expected_manifest_sha256="c" * 64,
+        )
 
 
 def test_checkpoint_restores_rank_specific_rng_and_has_unwrapped_model_keys(tmp_path):
