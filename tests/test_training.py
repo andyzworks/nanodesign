@@ -44,7 +44,6 @@ def test_regular_generation_centers_fixed_context_and_removes_native_design_coor
         ),
         "f": {
             "is_motif_atom_with_fixed_coord": torch.tensor([True, True, False]),
-            "is_virtual": torch.tensor([False, False, False]),
         },
     }
     coordinates = _official_generation_coordinates(batch)

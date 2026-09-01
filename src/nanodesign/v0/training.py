@@ -255,8 +255,9 @@ def _official_generation_coordinates(batch: Mapping[str, object]) -> torch.Tenso
     an arbitrary PDB frame with the origin-centred training distribution.
 
     NanoDesign v0 has no hotspot/ORI conditioning, so the frozen unconditioned rule is
-    the resolved fixed-context centre of mass.  This is deterministic, uses no native
-    design geometry, and leaves all pairwise motif features unchanged by translation.
+    Foundry's complete fixed-motif atom-slot centre of mass.  This is deterministic,
+    uses no native design geometry, and leaves pairwise motif features unchanged by
+    translation.
     """
 
     coordinates = batch.get("coord_atom_lvl_to_be_noised")
@@ -266,22 +267,23 @@ def _official_generation_coordinates(batch: Mapping[str, object]) -> torch.Tenso
     if not isinstance(features, Mapping):
         raise TypeError("batch.f must be an RFD3NA feature mapping")
     fixed = features.get("is_motif_atom_with_fixed_coord")
-    virtual = features.get("is_virtual")
-    if not isinstance(fixed, torch.Tensor) or not isinstance(virtual, torch.Tensor):
-        raise TypeError("batch lacks fixed-context or virtual-atom masks")
+    if not isinstance(fixed, torch.Tensor):
+        raise TypeError("batch lacks the fixed-context atom mask")
     if coordinates.ndim != 3 or coordinates.shape[-1] != 3:
         raise ValueError("generation coordinates must have shape [D, atoms, 3]")
-    if fixed.ndim != 1 or virtual.ndim != 1 or fixed.shape != virtual.shape:
-        raise ValueError("generation atom masks must be one-dimensional and shape-matched")
+    if fixed.ndim != 1:
+        raise ValueError("generation fixed-context mask must be one-dimensional")
     if coordinates.shape[1] != fixed.numel():
         raise ValueError("generation coordinates and atom masks differ in length")
-    resolved_fixed = fixed.bool() & ~virtual.bool()
-    if not bool(resolved_fixed.any()):
-        raise ValueError("NanoDesign conditional generation requires resolved fixed context")
+    fixed = fixed.bool()
+    if not bool(fixed.any()):
+        raise ValueError("NanoDesign conditional generation requires fixed context")
     centered = coordinates.clone()
-    center = centered[:, resolved_fixed, :].mean(dim=1, keepdim=True)
+    # This intentionally includes Foundry's finite padded motif atom slots: its
+    # DesignInputSpecification.set_com() averages the complete fixed motif mask.
+    center = centered[:, fixed, :].mean(dim=1, keepdim=True)
     centered = centered - center
-    centered[:, ~fixed.bool(), :] = 0.0
+    centered[:, ~fixed, :] = 0.0
     return centered.contiguous()
 
 

@@ -892,7 +892,7 @@ def main() -> None:
             "sequence_mask_normalization": "per_design_token",
             "coordinate_loss_mask": "all_resolved_atoms_foundry_occupancy",
             "coordinate_augmentation": args.coordinate_augmentation,
-            "generation_origin": "resolved_fixed_context_com_with_zeroed_design_coordinates",
+            "generation_origin": "foundry_fixed_motif_com_with_zeroed_design_coordinates",
             "optimizer": "AdamW",
             "learning_rate": training_config.learning_rate,
             "weight_decay": training_config.weight_decay,
