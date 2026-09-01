@@ -60,7 +60,12 @@ def test_validation_prefers_cache_without_changing_samples_or_fixed_noise(tmp_pa
 
     def fake_evaluate(_model, batch):
         observed.append((batch["sample_id"], batch["t"].clone(), batch["X_noisy_L"].clone()))
-        return {"loss": 3.0, "coordinate_loss": 2.0, "sequence_loss": 1.0}
+        return {
+            "loss": 3.0,
+            "coordinate_loss": 2.0,
+            "sequence_loss": 1.0,
+            "seq_recovery": 0.25,
+        }
 
     monkeypatch.setattr(train_v0, "_batch", raw_loader_must_not_run)
     monkeypatch.setattr(train_v0, "evaluate_loss", fake_evaluate)
@@ -92,7 +97,14 @@ def test_validation_prefers_cache_without_changing_samples_or_fixed_noise(tmp_pa
     assert (
         first
         == second
-        == {"antibody_h3": {"loss": 3.0, "coordinate_loss": 2.0, "sequence_loss": 1.0}}
+        == {
+            "antibody_h3": {
+                "loss": 3.0,
+                "coordinate_loss": 2.0,
+                "sequence_loss": 1.0,
+                "seq_recovery": 0.25,
+            }
+        }
     )
 
 
@@ -116,7 +128,12 @@ def test_validation_routes_each_sample_by_atom_count(monkeypatch, tmp_path):
 
     def fake_evaluate(current_model, batch):
         observed[batch["sample_id"]] = current_model.execution_mode
-        return {"loss": 3.0, "coordinate_loss": 2.0, "sequence_loss": 1.0}
+        return {
+            "loss": 3.0,
+            "coordinate_loss": 2.0,
+            "sequence_loss": 1.0,
+            "seq_recovery": 0.25,
+        }
 
     monkeypatch.setattr(train_v0, "_batch", fake_batch)
     monkeypatch.setattr(train_v0, "evaluate_loss", fake_evaluate)
@@ -146,7 +163,12 @@ def test_validation_force_chunked_overrides_atom_threshold(monkeypatch, tmp_path
 
     def fake_evaluate(model, _batch):
         observed.append(model.execution_mode)
-        return {"loss": 3.0, "coordinate_loss": 2.0, "sequence_loss": 1.0}
+        return {
+            "loss": 3.0,
+            "coordinate_loss": 2.0,
+            "sequence_loss": 1.0,
+            "seq_recovery": 0.25,
+        }
 
     monkeypatch.setattr(train_v0, "_batch", lambda *_args, **_kwargs: _batch(row["sample_id"]))
     monkeypatch.setattr(train_v0, "evaluate_loss", fake_evaluate)

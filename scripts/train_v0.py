@@ -226,7 +226,7 @@ def _validation(
                 for name, value in metrics.items():
                     totals[name] += value
                 local_count += 1
-            names = ("loss", "coordinate_loss", "sequence_loss")
+            names = ("loss", "coordinate_loss", "sequence_loss", "seq_recovery")
             packed = torch.tensor(
                 [*(totals[name] for name in names), local_count],
                 dtype=torch.float64,
@@ -716,6 +716,10 @@ def main() -> None:
                                 ]
                             )
                         )
+                        # Some random EDM batches have no t < 1 realization, so the
+                        # official SequenceLoss does not emit recovery on every train
+                        # step.  Stable recovery is recorded on fixed-t validation
+                        # batches above; keep train aggregates to always-defined loss.
                         for metric_name in ("loss", "coordinate_loss", "sequence_loss")
                     }
                     for task_name in task_names

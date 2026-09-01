@@ -225,6 +225,10 @@ def evaluate_loss(model: NanoDesignTiny, batch: Mapping[str, object]) -> dict[st
         "loss": loss,
         "coordinate_loss": metrics["coordinate_loss"],
         "sequence_loss": metrics["sequence_loss"],
+        # SequenceLoss already computes recovery on the supervised design mask.
+        # Expose that existing cheap signal at budget milestones instead of trying to
+        # infer sequence learning from cross-entropy alone.
+        "seq_recovery": metrics["seq_recovery"],
     }
     if not torch.isfinite(torch.stack(tuple(core.values()))).all():
         raise FloatingPointError("non-finite validation loss")
