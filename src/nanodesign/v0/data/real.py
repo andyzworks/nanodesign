@@ -302,6 +302,7 @@ def load_foundry_training_example(
     noise_level: float | None = None,
     diffusion_batch_size: int = 1,
     max_context_tokens: int | None = 384,
+    augment_coordinates: bool = False,
 ) -> dict[str, Any]:
     """Convert one catalog row into the public RFD3NA atom23 training format.
 
@@ -316,7 +317,6 @@ def load_foundry_training_example(
         from atomworks.ml.transforms.af3_reference_molecule import (
             _encode_atom_names_like_af3,
         )
-        from atomworks.ml.transforms.diffusion.edm import sample_noise_edm, sample_t_edm
         from rfd3na.constants import association_schemes
     except ImportError as error:
         raise ImportError("Foundry-format data requires the project 'model' extra") from error
@@ -525,18 +525,6 @@ def load_foundry_training_example(
     real_atom_mask = torch.as_tensor(atom_is_real, dtype=torch.bool)
     fixed_atom = ~atom_design
     motif_positions = torch.where(fixed_atom[:, None], positions, torch.zeros_like(positions))
-    if diffusion_batch_size < 1:
-        raise ValueError("diffusion_batch_size must be positive")
-    if noise_level is None:
-        timesteps = sample_t_edm(16.0, diffusion_batch_size)
-    else:
-        if noise_level <= 0:
-            raise ValueError("noise_level must be positive")
-        timesteps = torch.full((diffusion_batch_size,), float(noise_level))
-    diffusion_noise = sample_noise_edm(timesteps, len(positions))
-    diffusion_noise[:, ~atom_design, :] = 0.0
-    noisy_positions = positions.unsqueeze(0) + diffusion_noise
-
     restype = torch.nn.functional.one_hot(torch.as_tensor(token_restypes), num_classes=32).long()
     native_restype = torch.nn.functional.one_hot(
         torch.as_tensor(token_native_restypes), num_classes=32
@@ -597,13 +585,11 @@ def load_foundry_training_example(
         "token_bonds": torch.zeros((token_count, token_count), dtype=torch.bool),
         "atom_to_token_map": atom_token_tensor.to(torch.int32),
     }
-    return {
+    batch = {
         "sample_id": row["sample_id"],
         "task": row["task"],
         "f": feats,
-        "X_noisy_L": noisy_positions,
-        "t": timesteps,
-        "ground_truth_positions": positions.unsqueeze(0).expand(diffusion_batch_size, -1, -1),
+        "ground_truth_positions": positions.unsqueeze(0),
         "ground_truth_atom_mask": real_atom_mask & atom_design,
         "ground_truth_sequence": native_restype,
         "ground_truth_sequence_mask": token_design,
@@ -619,6 +605,63 @@ def load_foundry_training_example(
             "token_residue_keys": token_residue_keys,
         },
     }
+    return sample_foundry_training_diffusion(
+        batch,
+        diffusion_batch_size=diffusion_batch_size,
+        noise_level=noise_level,
+        augment_coordinates=augment_coordinates,
+    )
+
+
+def sample_foundry_training_diffusion(
+    batch: dict[str, Any],
+    *,
+    diffusion_batch_size: int,
+    noise_level: float | None,
+    augment_coordinates: bool,
+) -> dict[str, Any]:
+    """Sample official RFD3NA EDM inputs, optionally with its training augmentation."""
+
+    try:
+        from atomworks.ml.transforms.diffusion.edm import sample_noise_edm, sample_t_edm
+        from atomworks.ml.utils.geometry import random_rigid_augmentation
+    except ImportError as error:
+        raise ImportError("Foundry diffusion sampling requires the project 'model' extra") from error
+    if diffusion_batch_size < 1:
+        raise ValueError("diffusion_batch_size must be positive")
+    if noise_level is None:
+        timesteps = sample_t_edm(16.0, diffusion_batch_size)
+    else:
+        if noise_level <= 0:
+            raise ValueError("noise_level must be positive")
+        timesteps = torch.full((diffusion_batch_size,), float(noise_level))
+
+    base = batch["ground_truth_positions"][0]
+    clean = base.unsqueeze(0).expand(diffusion_batch_size, -1, -1).clone()
+    token_design = batch["ground_truth_sequence_mask"].bool()
+    atom_to_token = batch["f"]["atom_to_token_map"].long()
+    atom_design = token_design[atom_to_token]
+    if augment_coordinates:
+        # Pinned RFD3NA defaults: center_option=diffuse and sigma_perturb=2.0.
+        center_mask = batch["ground_truth_atom_mask"].bool()
+        if not bool(center_mask.any()):
+            raise ValueError("coordinate augmentation requires resolved design atoms")
+        clean = clean - base[center_mask].mean(dim=0)
+        clean = clean + torch.randn(diffusion_batch_size, 3)[:, None, :] * 2.0
+        clean = random_rigid_augmentation(clean, batch_size=diffusion_batch_size, s=0.0)
+
+    noise = sample_noise_edm(timesteps, len(base))
+    noise[:, ~atom_design, :] = 0.0
+    if augment_coordinates:
+        # Pinned AugmentNoise sigma_perturb_com=1.0, scaled exactly as RFD3NA.
+        center_noise = torch.randn(diffusion_batch_size, 3)
+        center_noise *= torch.clamp((timesteps[:, None] / 38.0) ** 3, 0.0, 1.0)
+        noise[:, atom_design, :] += center_noise[:, None, :]
+    batch["t"] = timesteps
+    batch["X_noisy_L"] = clean + noise
+    batch["ground_truth_positions"] = clean.contiguous()
+    batch["coord_atom_lvl_to_be_noised"] = clean.contiguous()
+    return batch
 
 
 class FoundryCatalogDataset(Dataset[dict[str, Any]]):

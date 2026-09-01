@@ -23,7 +23,10 @@ from typing import Any, Self
 
 import torch
 
-from nanodesign.v0.data.real import load_foundry_training_example
+from nanodesign.v0.data.real import (
+    load_foundry_training_example,
+    sample_foundry_training_diffusion,
+)
 
 CACHE_FORMAT_VERSION = 1
 PREPROCESSING_VERSION = "load_foundry_training_example.atom23.v1"
@@ -53,6 +56,7 @@ class FeatureCacheSpec:
     diffusion_batch_size: int = 1
     noise_level: float | None = None
     random_seed: int | None = None
+    augment_coordinates: bool = False
     preprocessing_version: str = PREPROCESSING_VERSION
 
     def __post_init__(self) -> None:
@@ -113,8 +117,9 @@ def _identity(row: dict[str, Any], spec: FeatureCacheSpec) -> dict[str, Any]:
         "dataset_version": dataset_version,
         "manifest_sha256": spec.manifest_sha256.lower(),
         "row_sha256": hashlib.sha256(_canonical_json(row).encode()).hexdigest(),
-        # Diffusion batch size, t/noise settings, and RNG seed are intentionally not
-        # cache identity: stochastic diffusion is freshly sampled after every read.
+        # Diffusion batch size, t/noise/augmentation settings, and RNG seed are
+        # intentionally not cache identity: stochastic diffusion is freshly sampled
+        # after every read from the same deterministic features.
         "preprocessing": {
             "max_context_tokens": spec.max_context_tokens,
             "preprocessing_version": spec.preprocessing_version,
@@ -227,42 +232,20 @@ def _validate_template(template: Any, sample_id: str) -> dict[str, Any]:
 def _sample_diffusion(template: dict[str, Any], spec: FeatureCacheSpec) -> dict[str, Any]:
     """Recreate the loader's EDM t/noise fields from a deterministic cached template."""
 
-    try:
-        from atomworks.ml.transforms.diffusion.edm import sample_noise_edm, sample_t_edm
-    except ImportError as error:
-        raise ImportError("sampling cached features requires the project 'model' extra") from error
-
-    def sample() -> tuple[torch.Tensor, torch.Tensor]:
-        if spec.noise_level is None:
-            timesteps = sample_t_edm(16.0, spec.diffusion_batch_size)
-        else:
-            timesteps = torch.full((spec.diffusion_batch_size,), float(spec.noise_level))
-        base_positions = template["ground_truth_positions"][0]
-        noise = sample_noise_edm(timesteps, len(base_positions))
-        token_design = template["ground_truth_sequence_mask"]
-        atom_to_token = template["f"]["atom_to_token_map"].long()
-        atom_design = token_design[atom_to_token]
-        noise[:, ~atom_design, :] = 0.0
-        return timesteps, base_positions.unsqueeze(0) + noise
+    def sample() -> dict[str, Any]:
+        return sample_foundry_training_diffusion(
+            _copy_containers(template),
+            diffusion_batch_size=spec.diffusion_batch_size,
+            noise_level=spec.noise_level,
+            augment_coordinates=spec.augment_coordinates,
+        )
 
     if spec.random_seed is not None:
         with torch.random.fork_rng(devices=[]):
             torch.manual_seed(spec.random_seed)
-            timesteps, noisy = sample()
+            batch = sample()
     else:
-        timesteps, noisy = sample()
-    # Cached deterministic tensors are read-only model inputs. Reuse their storage in
-    # the per-worker LRU and copy only containers; each call still owns fresh t/noise.
-    batch = _copy_containers(template)
-    positions = template["ground_truth_positions"][0]
-    batch["t"] = timesteps
-    batch["X_noisy_L"] = noisy
-    # DataLoader pin-memory writes into a destination buffer and rejects overlapping
-    # expand views. Materialize the identical values for asynchronous pinned H2D.
-    batch["ground_truth_positions"] = (
-        positions.unsqueeze(0).expand(spec.diffusion_batch_size, -1, -1).contiguous()
-    )
-    batch["coord_atom_lvl_to_be_noised"] = positions.unsqueeze(0)
+        batch = sample()
     return _validate_batch(batch, str(template["sample_id"]))
 
 
@@ -521,6 +504,7 @@ def preprocess_feature_batch(
             noise_level=spec.noise_level,
             diffusion_batch_size=spec.diffusion_batch_size,
             max_context_tokens=spec.max_context_tokens,
+            augment_coordinates=spec.augment_coordinates,
         )
 
     # A seeded cache build is deterministic and restores the caller's RNG. An unseeded

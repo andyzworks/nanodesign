@@ -9,8 +9,10 @@ import torch
 from nanodesign.v0.config import load_config
 from nanodesign.v0.model import NanoDesignTinyConfig
 from nanodesign.v0.training import (
+    ExponentialMovingAverage,
     TrainingConfig,
     _assert_model_matches_resolved_config,
+    _design_normalized_sequence_mask,
     build_optimizer,
     capture_rng_state,
     load_checkpoint,
@@ -23,6 +25,15 @@ from nanodesign.v0.training import (
 def test_training_config_rejects_invalid_optimizer_values():
     with pytest.raises(ValueError, match="invalid"):
         TrainingConfig(learning_rate=0)
+
+
+def test_sequence_mask_is_normalized_over_design_tokens_only():
+    weights = _design_normalized_sequence_mask(torch.tensor([False, True, False, True]))
+    assert torch.equal(weights, torch.tensor([0.0, 2.0, 0.0, 2.0]))
+    token_losses = torch.tensor([100.0, 1.0, 100.0, 3.0])
+    assert torch.isclose((weights * token_losses).mean(), torch.tensor(2.0))
+    with pytest.raises(ValueError, match="at least one"):
+        _design_normalized_sequence_mask(torch.zeros(3, dtype=torch.bool))
 
 
 def test_runtime_model_config_must_match_resolved_train_and_inference_config():
@@ -50,6 +61,23 @@ class _CheckpointModel(torch.nn.Module):
 
     def validate_parameter_budget(self):
         return None
+
+
+def test_ema_updates_and_can_supply_inference_weights():
+    model = _CheckpointModel()
+    initial = {name: value.clone() for name, value in model.state_dict().items()}
+    ema = ExponentialMovingAverage(model, decay=0.5)
+    with torch.no_grad():
+        for parameter in model.parameters():
+            parameter.add_(2.0)
+    ema.update(model)
+    for name, value in model.state_dict().items():
+        assert torch.allclose(ema.shadow[name], initial[name] * 0.5 + value * 0.5)
+    online = {name: value.clone() for name, value in model.state_dict().items()}
+    with ema.average_parameters(model):
+        for name, value in model.state_dict().items():
+            assert torch.equal(value, ema.shadow[name])
+    _assert_nested_equal(online, model.state_dict())
 
 
 def _seed_all(seed):

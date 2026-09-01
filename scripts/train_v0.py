@@ -42,6 +42,7 @@ from nanodesign.v0.distributed import (
 )
 from nanodesign.v0.model import STANDARD_MODE_MAX_ATOMS, NanoDesignTiny, NanoDesignTinyConfig
 from nanodesign.v0.training import (
+    ExponentialMovingAverage,
     TrainingConfig,
     build_optimizer,
     capture_rng_state,
@@ -118,6 +119,7 @@ def _batch(
     max_context_tokens: int,
     noise_level: float | None = None,
     diffusion_batch_size: int = 1,
+    augment_coordinates: bool = False,
 ) -> dict[str, Any]:
     return _to_device(
         load_foundry_training_example(
@@ -126,6 +128,7 @@ def _batch(
             noise_level=noise_level,
             diffusion_batch_size=diffusion_batch_size,
             max_context_tokens=max_context_tokens,
+            augment_coordinates=augment_coordinates,
         ),
         device,
     )
@@ -337,6 +340,21 @@ def main() -> None:
     parser.add_argument("--data-workers", type=int, default=4)
     parser.add_argument("--data-prefetch-factor", type=int, default=4)
     parser.add_argument("--data-pin-memory", action=argparse.BooleanOptionalAction, default=True)
+    parser.add_argument("--learning-rate", type=float, default=2e-4)
+    parser.add_argument("--weight-decay", type=float, default=1e-4)
+    parser.add_argument("--adam-beta2", type=float, default=0.95)
+    parser.add_argument(
+        "--ema-decay",
+        type=float,
+        default=0.999,
+        help="RFD3NA EMA decay; set to 0 only for a controlled ablation",
+    )
+    parser.add_argument(
+        "--coordinate-augmentation",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="use the pinned RFD3NA centering/rigid/COM training augmentation",
+    )
     parser.add_argument(
         "--feature-cache-fallback", action=argparse.BooleanOptionalAction, default=True
     )
@@ -357,6 +375,8 @@ def main() -> None:
         raise ValueError("checkpoint interval must be non-negative")
     if args.data_workers < 0 or args.data_prefetch_factor < 1:
         raise ValueError("data workers must be non-negative and prefetch factor positive")
+    if args.ema_decay != 0.0 and not 0.0 < args.ema_decay < 1.0:
+        raise ValueError("EMA decay must be zero (disabled) or between zero and one")
     if args.feature_cache_stage_root is not None and args.feature_cache_root is None:
         raise ValueError("feature-cache staging requires --feature-cache-root")
 
@@ -407,8 +427,17 @@ def main() -> None:
         if distributed.world_size > 1
         else base_model
     )
-    training_config = TrainingConfig()
+    training_config = TrainingConfig(
+        learning_rate=args.learning_rate,
+        weight_decay=args.weight_decay,
+        adam_beta2=args.adam_beta2,
+    )
     optimizer = build_optimizer(base_model, training_config)
+    ema = (
+        ExponentialMovingAverage(base_model, decay=args.ema_decay)
+        if args.ema_decay > 0.0
+        else None
+    )
     output_dir = Path(args.output_dir)
     if distributed.is_primary:
         output_dir.mkdir(parents=True, exist_ok=True)
@@ -450,6 +479,12 @@ def main() -> None:
         "milestone_samples": milestones,
         "feature_cache_enabled": args.feature_cache_root is not None,
         "size_packing_version": SIZE_PACKING_VERSION,
+        "learning_rate": training_config.learning_rate,
+        "weight_decay": training_config.weight_decay,
+        "adam_betas": [training_config.adam_beta1, training_config.adam_beta2],
+        "ema_decay": args.ema_decay,
+        "coordinate_augmentation": args.coordinate_augmentation,
+        "sequence_mask_normalization": "per_design_token",
     }
     if args.resume is not None:
         loaded = load_checkpoint(
@@ -459,6 +494,7 @@ def main() -> None:
             expected_manifest_sha256=manifest_sha,
             restore_rng=True,
             rng_rank=distributed.rank,
+            ema=ema,
         )
         if loaded.get("training_run_config") != training_run_config:
             raise ValueError("resume checkpoint training-run configuration mismatch")
@@ -555,6 +591,7 @@ def main() -> None:
             diffusion_batch_size=args.diffusion_batch_size,
             noise_level=None,
             random_seed=None,
+            augment_coordinates=args.coordinate_augmentation,
         )
         sampling_seeds = [
             args.seed + 1_000_000 + step * distributed.world_size + distributed.rank
@@ -613,26 +650,29 @@ def main() -> None:
                 elapsed_wall_seconds=elapsed,
                 manifest_sha256=manifest_sha,
                 resolved_config=resolved,
+                ema=ema,
             )
         if distributed.world_size > 1:
             dist.barrier()
 
     def append_milestone_record(completed_step: int) -> None:
         local_rng = capture_rng_state()
-        milestone_validation = _validation(
-            base_model,
-            root,
-            validation_rows,
-            device=device,
-            max_context_tokens=max_context_tokens,
-            samples_per_task=args.validation_samples_per_task,
-            seed=args.seed,
-            distributed=distributed,
-            feature_cache_root=args.feature_cache_root,
-            feature_cache_fallback=args.feature_cache_fallback,
-            manifest_sha256=manifest_sha,
-            force_chunked=force_chunked_execution,
-        )
+        validation_weights = ema.average_parameters(base_model) if ema is not None else nullcontext()
+        with validation_weights:
+            milestone_validation = _validation(
+                base_model,
+                root,
+                validation_rows,
+                device=device,
+                max_context_tokens=max_context_tokens,
+                samples_per_task=args.validation_samples_per_task,
+                seed=args.seed,
+                distributed=distributed,
+                feature_cache_root=args.feature_cache_root,
+                feature_cache_fallback=args.feature_cache_fallback,
+                manifest_sha256=manifest_sha,
+                force_chunked=force_chunked_execution,
+            )
         restore_rng_state(local_rng)
         elapsed = elapsed_wall_seconds()
         milestone_records.append(
@@ -720,6 +760,7 @@ def main() -> None:
                 device=device,
                 max_context_tokens=max_context_tokens,
                 diffusion_batch_size=args.diffusion_batch_size,
+                augment_coordinates=args.coordinate_augmentation,
             )
         atom_map = batch.get("f", {}).get("atom_to_token_map")
         if not isinstance(atom_map, torch.Tensor):
@@ -734,9 +775,9 @@ def main() -> None:
         base_model.execution_mode = synchronized_mode
         if device.type == "cuda":
             with torch.autocast(device_type="cuda", dtype=torch.bfloat16):
-                metrics = train_step(model, optimizer, batch, training_config)
+                metrics = train_step(model, optimizer, batch, training_config, ema)
         else:
-            metrics = train_step(model, optimizer, batch, training_config)
+            metrics = train_step(model, optimizer, batch, training_config, ema)
         metrics = reduce_scalar_metrics(metrics, device=device, world_size=distributed.world_size)
         sample_ids = all_gather_objects(row["sample_id"], distributed.world_size)
         local_execution_mode = getattr(base_model, "last_execution_mode", "standard")
@@ -793,32 +834,34 @@ def main() -> None:
     ):
         validation_after = final_milestone["validation_metrics_per_task"]
     else:
-        validation_after = _validation(
-            base_model,
-            root,
-            validation_rows,
-            device=device,
-            max_context_tokens=max_context_tokens,
-            samples_per_task=args.validation_samples_per_task,
-            seed=args.seed,
-            distributed=distributed,
-            feature_cache_root=args.feature_cache_root,
-            feature_cache_fallback=args.feature_cache_fallback,
-            manifest_sha256=manifest_sha,
-            force_chunked=force_chunked_execution,
-        )
-    generation = (
-        _generation_outputs(
-            base_model,
-            root,
-            test_rows,
-            device=device,
-            max_context_tokens=max_context_tokens,
-            output_dir=output_dir,
-        )
-        if distributed.is_primary and args.final_generation
-        else {}
-    )
+        validation_weights = ema.average_parameters(base_model) if ema is not None else nullcontext()
+        with validation_weights:
+            validation_after = _validation(
+                base_model,
+                root,
+                validation_rows,
+                device=device,
+                max_context_tokens=max_context_tokens,
+                samples_per_task=args.validation_samples_per_task,
+                seed=args.seed,
+                distributed=distributed,
+                feature_cache_root=args.feature_cache_root,
+                feature_cache_fallback=args.feature_cache_fallback,
+                manifest_sha256=manifest_sha,
+                force_chunked=force_chunked_execution,
+            )
+    generation = {}
+    if distributed.is_primary and args.final_generation:
+        generation_weights = ema.average_parameters(base_model) if ema is not None else nullcontext()
+        with generation_weights:
+            generation = _generation_outputs(
+                base_model,
+                root,
+                test_rows,
+                device=device,
+                max_context_tokens=max_context_tokens,
+                output_dir=output_dir,
+            )
     if not distributed.is_primary:
         dist.barrier()
         dist.destroy_process_group()
@@ -841,6 +884,16 @@ def main() -> None:
         "seed": args.seed,
         "device": str(device),
         "model_parameter_count": base_model.parameter_count,
+        "training_mechanics": {
+            "sequence_mask_normalization": "per_design_token",
+            "coordinate_augmentation": args.coordinate_augmentation,
+            "optimizer": "AdamW",
+            "learning_rate": training_config.learning_rate,
+            "weight_decay": training_config.weight_decay,
+            "adam_betas": [training_config.adam_beta1, training_config.adam_beta2],
+            "ema_decay": args.ema_decay,
+            "validation_and_generation_weights": "ema" if ema is not None else "online",
+        },
         "max_context_tokens": max_context_tokens,
         "task_steps": dict(task_steps),
         "execution_mode_counts_per_task": execution_mode_counts,

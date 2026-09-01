@@ -90,6 +90,20 @@ def _config_sha256(resolved: dict[str, Any]) -> str:
     return hashlib.sha256(encoded).hexdigest()
 
 
+def _resolve_device(value: str) -> torch.device:
+    device = torch.device(value)
+    if device.type != "cuda":
+        return device
+    if not torch.cuda.is_available():
+        raise RuntimeError("CUDA generation was requested but no CUDA device is available")
+    # CUDA_VISIBLE_DEVICES commonly exposes exactly one physical GPU to a milestone
+    # worker.  torch.cuda.set_device rejects the otherwise valid generic "cuda"
+    # spelling, so bind it to the worker's current logical device explicitly.
+    if device.index is None:
+        device = torch.device("cuda", torch.cuda.current_device())
+    return device
+
+
 def run(args: argparse.Namespace, *, root: Path | None = None) -> dict[str, Any]:
     root = (root or Path(__file__).resolve().parents[1]).resolve()
     config_path = Path(args.config)
@@ -97,9 +111,7 @@ def run(args: argparse.Namespace, *, root: Path | None = None) -> dict[str, Any]
         config_path = root / config_path
     resolved = load_config(config_path)
     validate_v0_config(resolved).require_ready()
-    device = torch.device(args.device)
-    if device.type == "cuda" and not torch.cuda.is_available():
-        raise RuntimeError("CUDA generation was requested but no CUDA device is available")
+    device = _resolve_device(args.device)
     if device.type == "cuda":
         torch.cuda.set_device(device)
     _seed(args.seed, device)
@@ -110,6 +122,7 @@ def run(args: argparse.Namespace, *, root: Path | None = None) -> dict[str, Any]
         args.checkpoint,
         model=model,
         expected_manifest_sha256=manifest_sha,
+        prefer_ema=True,
     )
     samples_seen = int(checkpoint.get("samples_seen", -1))
     if samples_seen != args.samples_seen:
@@ -175,6 +188,7 @@ def run(args: argparse.Namespace, *, root: Path | None = None) -> dict[str, Any]
         "manifest_sha256": manifest_sha,
         "config_sha256": config_sha,
         "model_parameter_count": model.parameter_count,
+        "weight_source": checkpoint["loaded_weight_source"],
         "generation_split": "test",
         "selection": "first complete fixed-context sample; first-row fallback",
         "tasks": tasks,

@@ -7,6 +7,7 @@ import json
 import os
 import random
 from collections.abc import Mapping
+from contextlib import contextmanager
 from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Any
@@ -25,10 +26,88 @@ class TrainingConfig:
     learning_rate: float = 2e-4
     weight_decay: float = 1e-4
     gradient_clip: float = 1.0
+    adam_beta1: float = 0.9
+    adam_beta2: float = 0.95
 
     def __post_init__(self) -> None:
-        if self.learning_rate <= 0 or self.weight_decay < 0 or self.gradient_clip <= 0:
+        if (
+            self.learning_rate <= 0
+            or self.weight_decay < 0
+            or self.gradient_clip <= 0
+            or not 0 <= self.adam_beta1 < 1
+            or not 0 <= self.adam_beta2 < 1
+        ):
             raise ValueError("invalid optimizer or gradient-clipping configuration")
+
+
+class ExponentialMovingAverage:
+    """Parameter EMA matching the frozen RFD3NA training default.
+
+    The online model remains the object optimized by DDP.  EMA tensors live on the
+    same devices, are checkpointed explicitly, and are swapped into the model only
+    for validation/generation.  This avoids changing the RFD3 architecture or its
+    forward path.
+    """
+
+    def __init__(self, model: torch.nn.Module, decay: float = 0.999) -> None:
+        if not 0.0 < decay < 1.0:
+            raise ValueError("EMA decay must be between zero and one")
+        self.decay = float(decay)
+        self.num_updates = 0
+        self.shadow = {
+            name: value.detach().clone() for name, value in model.state_dict().items()
+        }
+
+    @torch.no_grad()
+    def update(self, model: torch.nn.Module) -> None:
+        current = model.state_dict()
+        if current.keys() != self.shadow.keys():
+            raise ValueError("EMA state does not match model state")
+        for name, value in current.items():
+            target = self.shadow[name]
+            if target.is_floating_point():
+                target.lerp_(value.detach(), 1.0 - self.decay)
+            else:
+                target.copy_(value.detach())
+        self.num_updates += 1
+
+    def state_dict(self) -> dict[str, object]:
+        return {
+            "decay": self.decay,
+            "num_updates": self.num_updates,
+            "shadow": self.shadow,
+        }
+
+    def load_state_dict(self, state: Mapping[str, object]) -> None:
+        decay = float(state.get("decay", -1.0))
+        if decay != self.decay:
+            raise ValueError(f"EMA decay mismatch: checkpoint={decay}, runtime={self.decay}")
+        shadow = state.get("shadow")
+        if not isinstance(shadow, Mapping) or shadow.keys() != self.shadow.keys():
+            raise ValueError("checkpoint EMA state does not match model state")
+        for name, value in shadow.items():
+            if not isinstance(value, torch.Tensor):
+                raise TypeError("checkpoint EMA values must be tensors")
+            target = self.shadow[name]
+            if value.shape != target.shape or value.dtype != target.dtype:
+                raise ValueError(f"checkpoint EMA tensor mismatch for {name}")
+            target.copy_(value.to(device=target.device))
+        self.num_updates = int(state.get("num_updates", 0))
+        if self.num_updates < 0:
+            raise ValueError("EMA update count must be non-negative")
+
+    @contextmanager
+    def average_parameters(self, model: torch.nn.Module):
+        """Temporarily expose EMA parameters without perturbing online training."""
+
+        current = {
+            name: value.detach().clone() for name, value in model.state_dict().items()
+        }
+        model.load_state_dict(self.shadow, strict=True)
+        try:
+            yield model
+        finally:
+            model.load_state_dict(current, strict=True)
 
 
 def train_step(
@@ -36,6 +115,7 @@ def train_step(
     optimizer: torch.optim.Optimizer,
     batch: Mapping[str, object],
     config: TrainingConfig | None = None,
+    ema: ExponentialMovingAverage | None = None,
 ) -> dict[str, float]:
     """Run one step with the public RFD3NA diffusion and sequence losses."""
 
@@ -52,6 +132,9 @@ def train_step(
     if not torch.isfinite(gradient_norm):
         raise FloatingPointError("non-finite RFD3NA gradient norm")
     optimizer.step()
+    if ema is not None:
+        unwrapped = model.module if hasattr(model, "module") else model
+        ema.update(unwrapped)
     return {
         key: float(value.detach().item())
         for key, value in metrics.items()
@@ -85,7 +168,7 @@ def _compute_rfd3na_loss(
             gt_sequence.shape[0], dtype=torch.bool, device=gt_sequence.device
         ),
         "seq_token_lvl": gt_sequence.argmax(dim=-1),
-        "sequence_valid_mask": gt_sequence_mask.float(),
+        "sequence_valid_mask": _design_normalized_sequence_mask(gt_sequence_mask),
     }
     coordinate_loss_module = DiffusionLoss(
         weight=4.0,
@@ -107,6 +190,26 @@ def _compute_rfd3na_loss(
         **sequence_metrics,
     }
     return loss, metrics
+
+
+def _design_normalized_sequence_mask(mask: torch.Tensor) -> torch.Tensor:
+    """Make RFD3NA's token mean an average over design tokens, not all context.
+
+    The public ``SequenceLoss`` multiplies by ``sequence_valid_mask`` and then calls
+    ``mean`` over the full token dimension.  NanoDesign intentionally supervises only
+    the masked design region, so a binary mask would dilute H3/RNA gradients by the
+    amount of fixed context.  Scaling the positive entries by ``L / L_design`` keeps
+    the official loss, clipping, and weight unchanged while restoring the intended
+    per-design-token mean.
+    """
+
+    if mask.ndim != 1:
+        raise ValueError("sequence design mask must be one-dimensional")
+    weights = mask.float()
+    count = weights.sum()
+    if not bool(count > 0):
+        raise ValueError("sequence design mask must contain at least one token")
+    return weights * (weights.numel() / count)
 
 
 @torch.no_grad()
@@ -313,6 +416,7 @@ def build_optimizer(
         model.parameters(),
         lr=config.learning_rate,
         weight_decay=config.weight_decay,
+        betas=(config.adam_beta1, config.adam_beta2),
     )
 
 
@@ -380,6 +484,7 @@ def save_checkpoint(
     rng_states_by_rank: list[Mapping[str, object]] | None = None,
     milestone_records: list[Mapping[str, Any]] | None = None,
     elapsed_wall_seconds: float = 0.0,
+    ema: ExponentialMovingAverage | None = None,
 ) -> None:
     if step < 0:
         raise ValueError("checkpoint step must be non-negative")
@@ -399,6 +504,7 @@ def save_checkpoint(
     state = {
         "schema_version": SPEC_VERSION,
         "model": model.state_dict(),
+        "ema": ema.state_dict() if ema is not None else None,
         "optimizer": optimizer.state_dict(),
         "step": step,
         "samples_seen": samples_seen,
@@ -432,6 +538,8 @@ def load_checkpoint(
     expected_manifest_sha256: str | None = None,
     restore_rng: bool = False,
     rng_rank: int = 0,
+    ema: ExponentialMovingAverage | None = None,
+    prefer_ema: bool = False,
 ) -> dict[str, object]:
     checkpoint = torch.load(path, map_location="cpu", weights_only=False)
     if checkpoint.get("schema_version") != SPEC_VERSION:
@@ -454,6 +562,24 @@ def load_checkpoint(
         if checkpoint.get("manifest_sha256") != expected_manifest_sha256:
             raise ValueError("checkpoint dataset manifest mismatch")
     model.load_state_dict(checkpoint["model"], strict=True)
+    ema_state = checkpoint.get("ema")
+    if ema is not None:
+        if isinstance(ema_state, Mapping):
+            ema.load_state_dict(ema_state)
+        else:
+            # Backward-compatible resume from an online-only pilot checkpoint.
+            ema.shadow = {
+                name: value.detach().clone() for name, value in model.state_dict().items()
+            }
+            ema.num_updates = 0
+    if prefer_ema and isinstance(ema_state, Mapping):
+        shadow = ema_state.get("shadow")
+        if not isinstance(shadow, Mapping):
+            raise TypeError("checkpoint EMA state is missing shadow parameters")
+        model.load_state_dict(shadow, strict=True)
+        checkpoint["loaded_weight_source"] = "ema"
+    else:
+        checkpoint["loaded_weight_source"] = "online"
     if optimizer is not None:
         optimizer.load_state_dict(checkpoint["optimizer"])
     if restore_rng:

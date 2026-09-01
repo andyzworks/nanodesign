@@ -46,7 +46,7 @@ def _batch(sample_id: str = "sabdab2:fixed_H_L") -> dict:
         "X_noisy_L": torch.arange(atom_count * 3, dtype=torch.float32).reshape(1, atom_count, 3),
         "t": torch.tensor([0.5]),
         "ground_truth_positions": torch.zeros(1, atom_count, 3),
-        "ground_truth_atom_mask": torch.ones(atom_count, dtype=torch.bool),
+        "ground_truth_atom_mask": torch.tensor([False] * 14 + [True] * 14),
         "ground_truth_sequence": torch.zeros(token_count, 32),
         "ground_truth_sequence_mask": torch.tensor([False, True]),
         "coord_atom_lvl_to_be_noised": torch.zeros(1, atom_count, 3),
@@ -162,6 +162,39 @@ def test_cache_resamples_diffusion_but_preserves_all_deterministic_features(tmp_
         key: value for key, value in second.items() if key not in {"t", "X_noisy_L"}
     }
     assert model_ready_batches_equal(deterministic_first, deterministic_second)
+
+
+def test_cache_training_augmentation_is_seeded_rigid_and_keeps_context_noise_free(tmp_path):
+    row, batch = _row(), _batch()
+    # Give the two tokens non-degenerate coordinates so rigid-distance checks are meaningful.
+    coordinates = torch.arange(28 * 3, dtype=torch.float32).reshape(1, 28, 3)
+    batch["ground_truth_positions"] = coordinates.clone()
+    batch["coord_atom_lvl_to_be_noised"] = coordinates.clone()
+    with SQLiteFeatureCache(tmp_path, readonly=False) as cache:
+        cache.put(row, _spec(), batch)
+    augmented_spec = _spec(
+        diffusion_batch_size=2,
+        noise_level=0.5,
+        random_seed=17,
+        augment_coordinates=True,
+    )
+    with SQLiteFeatureCache(tmp_path, readonly=True, lru_size=1) as cache:
+        augmented = cache.get(row, augmented_spec)
+        repeated = cache.get(row, augmented_spec)
+    assert model_ready_batches_equal(augmented, repeated)
+    clean = augmented["ground_truth_positions"]
+    assert clean.shape == (2, 28, 3)
+    assert not torch.equal(clean[0], clean[1])
+    # A global rigid transform preserves pairwise atom distances in every realization.
+    original_distance = torch.linalg.vector_norm(coordinates[0, 0] - coordinates[0, 27])
+    for realization in clean:
+        assert torch.allclose(
+            torch.linalg.vector_norm(realization[0] - realization[27]),
+            original_distance,
+            atol=1e-4,
+        )
+    # Fixed-context atoms receive no EDM or COM noise after augmentation.
+    assert torch.equal(augmented["X_noisy_L"][:, :14], clean[:, :14])
 
 
 def test_fixed_real_sample_cached_and_uncached_are_bitwise_equal_when_present(tmp_path):

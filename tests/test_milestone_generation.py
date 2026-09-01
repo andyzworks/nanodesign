@@ -49,6 +49,12 @@ def _args(tmp_path, samples_seen=3000):
     )
 
 
+def test_generic_cuda_device_resolves_to_current_logical_device(monkeypatch):
+    monkeypatch.setattr(torch.cuda, "is_available", lambda: True)
+    monkeypatch.setattr(torch.cuda, "current_device", lambda: 0)
+    assert runner._resolve_device("cuda") == torch.device("cuda:0")
+
+
 def test_milestone_selection_matches_final_complete_context_rule():
     incomplete, complete = _row("protein_binder"), _row("protein_binder")
     incomplete["sample_id"] = "incomplete"
@@ -66,10 +72,16 @@ def test_milestone_runner_validates_checkpoint_and_writes_all_three_tasks(tmp_pa
     expected_manifest = hashlib.sha256((root / "docs/data_v0_stats.json").read_bytes()).hexdigest()
     calls = {}
 
-    def fake_load_checkpoint(path, *, model, expected_manifest_sha256):
+    def fake_load_checkpoint(path, *, model, expected_manifest_sha256, prefer_ema):
         calls["checkpoint"] = path
         calls["manifest"] = expected_manifest_sha256
-        return {"samples_seen": 3000, "step": 750, "config_sha256": config_sha}
+        calls["prefer_ema"] = prefer_ema
+        return {
+            "samples_seen": 3000,
+            "step": 750,
+            "config_sha256": config_sha,
+            "loaded_weight_source": "ema",
+        }
 
     def fake_catalog(path):
         task = next(task for task, suffix in runner.SPLITS.items() if str(path).endswith(suffix))
@@ -100,9 +112,11 @@ def test_milestone_runner_validates_checkpoint_and_writes_all_three_tasks(tmp_pa
     assert calls == {
         "checkpoint": tmp_path / "milestone.pt",
         "manifest": expected_manifest,
+        "prefer_ema": True,
     }
     assert metadata["samples_seen"] == 3000
     assert metadata["optimizer_step"] == 750
+    assert metadata["weight_source"] == "ema"
     assert set(metadata["tasks"]) == set(runner.SPLITS)
     assert metadata["generation"] == metadata["tasks"]
     assert [metadata["tasks"][task]["seed"] for task in runner.SPLITS] == [17, 18, 19]
