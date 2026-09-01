@@ -45,6 +45,7 @@ def _args(tmp_path, samples_seen=3000):
         config="configs/v0.yaml",
         seed=17,
         device="cpu",
+        weight_source="ema",
         output_root=tmp_path / "generations",
     )
 

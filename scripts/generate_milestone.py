@@ -122,7 +122,7 @@ def run(args: argparse.Namespace, *, root: Path | None = None) -> dict[str, Any]
         args.checkpoint,
         model=model,
         expected_manifest_sha256=manifest_sha,
-        prefer_ema=True,
+        prefer_ema=args.weight_source == "ema",
     )
     samples_seen = int(checkpoint.get("samples_seen", -1))
     if samples_seen != args.samples_seen:
@@ -211,6 +211,12 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--config", default="configs/v0.yaml")
     parser.add_argument("--seed", type=int, default=7)
     parser.add_argument("--device", default="cuda")
+    parser.add_argument(
+        "--weight-source",
+        choices=("ema", "online"),
+        default="ema",
+        help="checkpoint weights to evaluate; EMA remains the baseline default",
+    )
     parser.add_argument("--output-root", type=Path, required=True)
     return parser
 
