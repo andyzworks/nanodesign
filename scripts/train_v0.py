@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Train the frozen NanoDesign v0 RFD3NA-Tiny model on all three real tasks."""
+"""Train the frozen NanoDesign v0 RFD3NA-Tiny model on selected real tasks."""
 
 from __future__ import annotations
 
@@ -62,6 +62,7 @@ SPLITS = {
     "antibody_h3": "data/processed/v0/splits/antibody_h3/{split}.jsonl",
     "rna": "data/processed/v0/splits/rna_binding/{split}.jsonl",
 }
+TASK_INDEX = {task: index for index, task in enumerate(SPLITS)}
 
 
 def _to_device(value: Any, device: torch.device) -> Any:
@@ -90,11 +91,27 @@ def _sample_milestones(value: str) -> list[int]:
     return milestones
 
 
-def _load_rows(root: Path, split: str) -> dict[str, list[dict[str, Any]]]:
-    return {
-        task: load_split_catalog(root / pattern.format(split=split))
-        for task, pattern in SPLITS.items()
-    }
+def _task_names(value: str) -> list[str]:
+    requested = [item.strip() for item in value.split(",") if item.strip()]
+    if not requested:
+        raise argparse.ArgumentTypeError("tasks must not be empty")
+    unknown = sorted(set(requested) - set(SPLITS))
+    if unknown:
+        raise argparse.ArgumentTypeError(
+            f"unknown task(s): {', '.join(unknown)}; choose from {', '.join(SPLITS)}"
+        )
+    if len(requested) != len(set(requested)):
+        raise argparse.ArgumentTypeError("tasks must not contain duplicates")
+    # Canonical ordering preserves the frozen unified task cycle, sample shuffles,
+    # validation subsets, and generation seeds when a diagnostic selects one task.
+    return [task for task in SPLITS if task in requested]
+
+
+def _load_rows(
+    root: Path, split: str, task_names: list[str] | None = None
+) -> dict[str, list[dict[str, Any]]]:
+    selected = list(SPLITS) if task_names is None else task_names
+    return {task: load_split_catalog(root / SPLITS[task].format(split=split)) for task in selected}
 
 
 def _fixed_context_tokens(row: dict[str, Any]) -> int:
@@ -160,7 +177,8 @@ def _validation(
     )
     report = {}
     try:
-        for task_index, (task, task_rows) in enumerate(rows.items()):
+        for task, task_rows in rows.items():
+            task_index = TASK_INDEX[task]
             # Keep the frozen sample selection and rank sharding independent of the
             # storage path.  A cache hit replaces only deterministic CIF parsing and
             # feature construction; the same fixed validation seed freshly samples
@@ -311,6 +329,15 @@ def main() -> None:
         type=_sample_milestones,
         help="global-sample milestones, e.g. 3000,9000,18000,36000",
     )
+    parser.add_argument(
+        "--tasks",
+        type=_task_names,
+        default=list(SPLITS),
+        help=(
+            "comma-separated frozen task names; defaults to the unchanged "
+            "protein_binder,antibody_h3,rna unified cycle"
+        ),
+    )
     parser.add_argument("--seed", type=int, default=7)
     parser.add_argument("--validation-samples-per-task", type=int, default=4)
     parser.add_argument(
@@ -379,7 +406,7 @@ def main() -> None:
         "--final-generation",
         action=argparse.BooleanOptionalAction,
         default=True,
-        help="run the unchanged three-task generation after training; disable for throughput runs",
+        help="run the unchanged generation path for the selected task(s) after training",
     )
     args = parser.parse_args()
     if min(args.validation_samples_per_task, args.diffusion_batch_size) < 1:
@@ -402,11 +429,12 @@ def main() -> None:
     validate_v0_config(resolved).require_ready()
     max_context_tokens = args.max_context_tokens or int(resolved["model"]["max_context_tokens"])
     distributed = context_from_environment()
+    task_names = list(args.tasks)
     milestones = args.milestone_samples or []
     if any(value % distributed.world_size for value in milestones):
         raise ValueError("every sample milestone must be divisible by world size")
-    if any((value // distributed.world_size) % len(SPLITS) for value in milestones):
-        raise ValueError("sample milestones must end on an exact 1:1:1 task cycle")
+    if any((value // distributed.world_size) % len(task_names) for value in milestones):
+        raise ValueError("sample milestones must end on an exact selected-task cycle")
     milestone_steps = [value // distributed.world_size for value in milestones]
     total_steps = milestone_steps[-1] if milestone_steps else int(args.steps)
     if args.steps is not None and milestone_steps and args.steps != total_steps:
@@ -457,9 +485,7 @@ def main() -> None:
         base_learning_rate=training_config.learning_rate,
     )
     ema = (
-        ExponentialMovingAverage(base_model, decay=args.ema_decay)
-        if args.ema_decay > 0.0
-        else None
+        ExponentialMovingAverage(base_model, decay=args.ema_decay) if args.ema_decay > 0.0 else None
     )
     output_dir = Path(args.output_dir)
     if distributed.is_primary:
@@ -468,11 +494,12 @@ def main() -> None:
         dist.barrier()
     stats_path = root / "docs/data_v0_stats.json"
     manifest_sha = hashlib.sha256(stats_path.read_bytes()).hexdigest()
-    train_rows = _load_rows(root, "train")
-    validation_rows = _load_rows(root, "validation")
-    test_rows = _load_rows(root, "test")
+    train_rows = _load_rows(root, "train", task_names)
+    validation_rows = _load_rows(root, "validation", task_names)
+    test_rows = _load_rows(root, "test", task_names)
     shuffled = {}
-    for task_index, (task, rows) in enumerate(train_rows.items()):
+    for task, rows in train_rows.items():
+        task_index = TASK_INDEX[task]
         shuffled[task] = size_aware_rank_packing(
             rows,
             # A fixed flattened order makes 1/2/4-GPU scaling consume exactly the
@@ -481,7 +508,6 @@ def main() -> None:
             seed=args.seed + task_index,
             max_context_tokens=max_context_tokens,
         )
-    task_names = list(SPLITS)
     cursors = defaultdict(int)
     history = []
     task_steps = defaultdict(int)
@@ -690,7 +716,9 @@ def main() -> None:
 
     def append_milestone_record(completed_step: int) -> None:
         local_rng = capture_rng_state()
-        validation_weights = ema.average_parameters(base_model) if ema is not None else nullcontext()
+        validation_weights = (
+            ema.average_parameters(base_model) if ema is not None else nullcontext()
+        )
         with validation_weights:
             milestone_validation = _validation(
                 base_model,
@@ -885,7 +913,9 @@ def main() -> None:
     ):
         validation_after = final_milestone["validation_metrics_per_task"]
     else:
-        validation_weights = ema.average_parameters(base_model) if ema is not None else nullcontext()
+        validation_weights = (
+            ema.average_parameters(base_model) if ema is not None else nullcontext()
+        )
         with validation_weights:
             validation_after = _validation(
                 base_model,
@@ -903,7 +933,9 @@ def main() -> None:
             )
     generation = {}
     if distributed.is_primary and args.final_generation:
-        generation_weights = ema.average_parameters(base_model) if ema is not None else nullcontext()
+        generation_weights = (
+            ema.average_parameters(base_model) if ema is not None else nullcontext()
+        )
         with generation_weights:
             generation = _generation_outputs(
                 base_model,

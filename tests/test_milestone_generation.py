@@ -44,6 +44,7 @@ def _args(tmp_path, samples_seen=3000):
         samples_seen=samples_seen,
         config="configs/v0.yaml",
         seed=17,
+        tasks=list(runner.SPLITS),
         device="cpu",
         weight_source="ema",
         output_root=tmp_path / "generations",
@@ -125,6 +126,48 @@ def test_milestone_runner_validates_checkpoint_and_writes_all_three_tasks(tmp_pa
     assert metadata["tasks"]["protein_binder"]["binder_chain"] == "B"
     assert all((output / f"{task}.pdb").is_file() for task in runner.SPLITS)
     assert json.loads((output / "metadata.json").read_text()) == metadata
+
+
+def test_milestone_runner_single_task_keeps_unified_generation_seed(tmp_path, monkeypatch):
+    root = Path(__file__).resolve().parents[1]
+    resolved = runner.load_config(root / "configs/v0.yaml")
+    config_sha = runner._config_sha256(resolved)
+    args = _args(tmp_path)
+    args.tasks = ["rna"]
+
+    monkeypatch.setattr(runner, "NanoDesignTiny", _FakeModel)
+    monkeypatch.setattr(
+        runner,
+        "load_checkpoint",
+        lambda *args, **kwargs: {
+            "samples_seen": 3000,
+            "step": 3000,
+            "config_sha256": config_sha,
+            "loaded_weight_source": "ema",
+        },
+    )
+    monkeypatch.setattr(runner, "load_split_catalog", lambda _path: [_row("rna")])
+    monkeypatch.setattr(
+        runner, "_batch", lambda _root, row, **_kwargs: {"sample_id": row["sample_id"]}
+    )
+    monkeypatch.setattr(
+        runner,
+        "generate",
+        lambda _model, _batch: {
+            "X_L": torch.zeros(1, 1, 3),
+            "sequence_logits_I": torch.zeros(1, 1, 32),
+        },
+    )
+    monkeypatch.setattr(
+        runner,
+        "write_generation_structure",
+        lambda _output, _batch, path: Path(path).write_text("END\n", encoding="utf-8") or {},
+    )
+
+    metadata = runner.run(args, root=root)
+
+    assert list(metadata["tasks"]) == ["rna"]
+    assert metadata["tasks"]["rna"]["seed"] == 19
 
 
 @pytest.mark.parametrize(

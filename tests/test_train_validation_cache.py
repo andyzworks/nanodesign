@@ -88,7 +88,10 @@ def test_validation_prefers_cache_without_changing_samples_or_fixed_noise(tmp_pa
     observed.clear()
     second = train_v0._validation(**arguments)
 
-    expected_ids = [row["sample_id"] for row in random.Random(7 + 1000).sample(rows, 2)]
+    expected_ids = [
+        row["sample_id"]
+        for row in random.Random(7 + 1000 + train_v0.TASK_INDEX["antibody_h3"]).sample(rows, 2)
+    ]
     assert [item[0] for item in first_observed] == expected_ids
     assert [item[0] for item in observed] == expected_ids
     assert all(torch.equal(item[1], torch.tensor([0.5])) for item in first_observed + observed)
@@ -185,3 +188,9 @@ def test_validation_force_chunked_overrides_atom_threshold(monkeypatch, tmp_path
     )
 
     assert observed == ["chunked"]
+
+
+def test_single_task_selection_preserves_canonical_order_and_indices():
+    assert train_v0._task_names("protein_binder") == ["protein_binder"]
+    assert train_v0._task_names("rna,protein_binder") == ["protein_binder", "rna"]
+    assert train_v0.TASK_INDEX == {"protein_binder": 0, "antibody_h3": 1, "rna": 2}

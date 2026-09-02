@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Generate the three frozen test designs from one NanoDesign milestone checkpoint."""
+"""Generate selected frozen test designs from one NanoDesign milestone checkpoint."""
 
 from __future__ import annotations
 
@@ -23,6 +23,21 @@ SPLITS = {
     "antibody_h3": "data/processed/v0/splits/antibody_h3/test.jsonl",
     "rna": "data/processed/v0/splits/rna_binding/test.jsonl",
 }
+TASK_INDEX = {task: index for index, task in enumerate(SPLITS)}
+
+
+def _task_names(value: str) -> list[str]:
+    requested = [item.strip() for item in value.split(",") if item.strip()]
+    if not requested:
+        raise argparse.ArgumentTypeError("tasks must not be empty")
+    unknown = sorted(set(requested) - set(SPLITS))
+    if unknown:
+        raise argparse.ArgumentTypeError(
+            f"unknown task(s): {', '.join(unknown)}; choose from {', '.join(SPLITS)}"
+        )
+    if len(requested) != len(set(requested)):
+        raise argparse.ArgumentTypeError("tasks must not contain duplicates")
+    return [task for task in SPLITS if task in requested]
 
 
 def _model_config(resolved: dict[str, Any]) -> NanoDesignTinyConfig:
@@ -138,7 +153,9 @@ def run(args: argparse.Namespace, *, root: Path | None = None) -> dict[str, Any]
     output_dir.mkdir(parents=True, exist_ok=True)
     tasks: dict[str, dict[str, Any]] = {}
     model.eval()
-    for task_index, (task, relative_split) in enumerate(SPLITS.items()):
+    for task in args.tasks:
+        task_index = TASK_INDEX[task]
+        relative_split = SPLITS[task]
         rows = load_split_catalog(root / relative_split)
         row, context_complete = _generation_row(rows, max_context_tokens=max_context_tokens)
         task_seed = args.seed + task_index
@@ -210,6 +227,12 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--samples-seen", type=int, required=True)
     parser.add_argument("--config", default="configs/v0.yaml")
     parser.add_argument("--seed", type=int, default=7)
+    parser.add_argument(
+        "--tasks",
+        type=_task_names,
+        default=list(SPLITS),
+        help="comma-separated frozen task names; defaults to all three tasks",
+    )
     parser.add_argument("--device", default="cuda")
     parser.add_argument(
         "--weight-source",
