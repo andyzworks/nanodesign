@@ -53,6 +53,7 @@ from nanodesign.v0.training import (
     restore_rng_state,
     save_checkpoint,
     train_step,
+    validate_resume_training_run_config,
     write_generation_structure,
 )
 
@@ -524,8 +525,11 @@ def main() -> None:
             rng_rank=distributed.rank,
             ema=ema,
         )
-        if loaded.get("training_run_config") != training_run_config:
-            raise ValueError("resume checkpoint training-run configuration mismatch")
+        validate_resume_training_run_config(
+            loaded.get("training_run_config"),
+            training_run_config,
+            samples_seen=int(loaded["samples_seen"]),
+        )
         start_step = int(loaded["step"])
         if start_step > total_steps:
             raise ValueError("resume checkpoint step exceeds requested total steps")

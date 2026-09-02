@@ -20,6 +20,7 @@ from nanodesign.v0.training import (
     load_checkpoint,
     restore_rng_state,
     save_checkpoint,
+    validate_resume_training_run_config,
     write_generation_structure,
 )
 
@@ -29,6 +30,31 @@ def test_training_config_rejects_invalid_optimizer_values():
         TrainingConfig(learning_rate=0)
     with pytest.raises(ValueError, match="invalid"):
         TrainingConfig(gradient_clip=0)
+
+
+def test_resume_config_accepts_only_a_strict_completed_milestone_extension():
+    checkpoint = {
+        "seed": 17,
+        "learning_rate": 5e-4,
+        "milestone_samples": [300, 900, 3000, 9000],
+    }
+    extended = {**checkpoint, "milestone_samples": [300, 900, 3000, 9000, 18000]}
+    validate_resume_training_run_config(checkpoint, checkpoint, samples_seen=7250)
+    validate_resume_training_run_config(checkpoint, extended, samples_seen=9000)
+    with pytest.raises(ValueError, match="configuration mismatch"):
+        validate_resume_training_run_config(checkpoint, extended, samples_seen=8500)
+    with pytest.raises(ValueError, match="configuration mismatch"):
+        validate_resume_training_run_config(
+            checkpoint,
+            {**extended, "learning_rate": 1e-3},
+            samples_seen=9000,
+        )
+    with pytest.raises(ValueError, match="configuration mismatch"):
+        validate_resume_training_run_config(
+            checkpoint,
+            {**checkpoint, "milestone_samples": [300, 3000, 9000, 18000]},
+            samples_seen=9000,
+        )
 
 
 def test_pinned_af3_scheduler_uses_official_warmup_and_constant_path_is_unchanged():

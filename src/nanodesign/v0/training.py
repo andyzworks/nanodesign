@@ -40,6 +40,35 @@ class TrainingConfig:
             raise ValueError("invalid optimizer or gradient-clipping configuration")
 
 
+def validate_resume_training_run_config(
+    checkpoint_config: object,
+    requested_config: Mapping[str, object],
+    *,
+    samples_seen: int,
+) -> None:
+    """Accept an exact resume or a strict extension of completed milestones."""
+
+    if checkpoint_config == requested_config:
+        return
+    if not isinstance(checkpoint_config, Mapping):
+        raise ValueError("resume checkpoint training-run configuration mismatch")
+    checkpoint_copy = dict(checkpoint_config)
+    requested_copy = dict(requested_config)
+    checkpoint_milestones = checkpoint_copy.pop("milestone_samples", None)
+    requested_milestones = requested_copy.pop("milestone_samples", None)
+    extension_is_safe = (
+        checkpoint_copy == requested_copy
+        and isinstance(checkpoint_milestones, list)
+        and isinstance(requested_milestones, list)
+        and bool(checkpoint_milestones)
+        and len(requested_milestones) > len(checkpoint_milestones)
+        and requested_milestones[: len(checkpoint_milestones)] == checkpoint_milestones
+        and samples_seen == checkpoint_milestones[-1]
+    )
+    if not extension_is_safe:
+        raise ValueError("resume checkpoint training-run configuration mismatch")
+
+
 class ExponentialMovingAverage:
     """Parameter EMA matching the frozen RFD3NA training default.
 
