@@ -631,7 +631,9 @@ def sample_foundry_training_diffusion(
         from atomworks.ml.transforms.diffusion.edm import sample_noise_edm, sample_t_edm
         from atomworks.ml.utils.geometry import random_rigid_augmentation
     except ImportError as error:
-        raise ImportError("Foundry diffusion sampling requires the project 'model' extra") from error
+        raise ImportError(
+            "Foundry diffusion sampling requires the project 'model' extra"
+        ) from error
     if diffusion_batch_size < 1:
         raise ValueError("diffusion_batch_size must be positive")
     if noise_level is None:

@@ -51,7 +51,7 @@ def validate_resume_training_run_config(
     if checkpoint_config == requested_config:
         return
     if not isinstance(checkpoint_config, Mapping):
-        raise ValueError("resume checkpoint training-run configuration mismatch")
+        raise TypeError("resume checkpoint training-run configuration must be a mapping")
     checkpoint_copy = dict(checkpoint_config)
     requested_copy = dict(requested_config)
     checkpoint_milestones = checkpoint_copy.pop("milestone_samples", None)
@@ -83,9 +83,7 @@ class ExponentialMovingAverage:
             raise ValueError("EMA decay must be between zero and one")
         self.decay = float(decay)
         self.num_updates = 0
-        self.shadow = {
-            name: value.detach().clone() for name, value in model.state_dict().items()
-        }
+        self.shadow = {name: value.detach().clone() for name, value in model.state_dict().items()}
 
     @torch.no_grad()
     def update(self, model: torch.nn.Module) -> None:
@@ -129,9 +127,7 @@ class ExponentialMovingAverage:
     def average_parameters(self, model: torch.nn.Module):
         """Temporarily expose EMA parameters without perturbing online training."""
 
-        current = {
-            name: value.detach().clone() for name, value in model.state_dict().items()
-        }
+        current = {name: value.detach().clone() for name, value in model.state_dict().items()}
         model.load_state_dict(self.shadow, strict=True)
         try:
             yield model

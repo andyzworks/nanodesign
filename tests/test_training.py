@@ -41,6 +41,8 @@ def test_resume_config_accepts_only_a_strict_completed_milestone_extension():
     extended = {**checkpoint, "milestone_samples": [300, 900, 3000, 9000, 18000]}
     validate_resume_training_run_config(checkpoint, checkpoint, samples_seen=7250)
     validate_resume_training_run_config(checkpoint, extended, samples_seen=9000)
+    with pytest.raises(TypeError, match="must be a mapping"):
+        validate_resume_training_run_config(None, extended, samples_seen=9000)
     with pytest.raises(ValueError, match="configuration mismatch"):
         validate_resume_training_run_config(checkpoint, extended, samples_seen=8500)
     with pytest.raises(ValueError, match="configuration mismatch"):
@@ -60,21 +62,18 @@ def test_resume_config_accepts_only_a_strict_completed_milestone_extension():
 def test_pinned_af3_scheduler_uses_official_warmup_and_constant_path_is_unchanged():
     model = _CheckpointModel()
     optimizer = build_optimizer(model, TrainingConfig(learning_rate=1.8e-3))
-    assert build_learning_rate_scheduler(
-        optimizer, schedule="constant", base_learning_rate=1.8e-3
-    ) is None
-    scheduler = build_learning_rate_scheduler(
-        optimizer, schedule="af3", base_learning_rate=1.8e-3
+    assert (
+        build_learning_rate_scheduler(optimizer, schedule="constant", base_learning_rate=1.8e-3)
+        is None
     )
+    scheduler = build_learning_rate_scheduler(optimizer, schedule="af3", base_learning_rate=1.8e-3)
     assert scheduler is not None
     assert optimizer.param_groups[0]["lr"] == 0.0
     optimizer.step()
     scheduler.step()
     assert optimizer.param_groups[0]["lr"] == pytest.approx(1.8e-6)
     with pytest.raises(ValueError, match="constant or af3"):
-        build_learning_rate_scheduler(
-            optimizer, schedule="cosine", base_learning_rate=1.8e-3
-        )
+        build_learning_rate_scheduler(optimizer, schedule="cosine", base_learning_rate=1.8e-3)
 
 
 def test_sequence_mask_is_normalized_over_design_tokens_only():
@@ -101,9 +100,7 @@ def test_regular_generation_centers_fixed_context_and_removes_native_design_coor
         torch.tensor([[[-2.0, 0.0, 0.0], [2.0, 0.0, 0.0], [0.0, 0.0, 0.0]]]),
     )
     # The cached/native batch is immutable so validation and future noising remain exact.
-    assert torch.equal(
-        batch["coord_atom_lvl_to_be_noised"][0, 2], torch.tensor([99.0, 99.0, 99.0])
-    )
+    assert torch.equal(batch["coord_atom_lvl_to_be_noised"][0, 2], torch.tensor([99.0, 99.0, 99.0]))
 
 
 def test_runtime_model_config_must_match_resolved_train_and_inference_config():
@@ -261,9 +258,7 @@ def test_checkpoint_restores_learning_rate_scheduler_state(tmp_path):
 
     restored_model = _CheckpointModel()
     restored_optimizer = build_optimizer(restored_model)
-    restored_scheduler = torch.optim.lr_scheduler.StepLR(
-        restored_optimizer, step_size=1, gamma=0.5
-    )
+    restored_scheduler = torch.optim.lr_scheduler.StepLR(restored_optimizer, step_size=1, gamma=0.5)
     load_checkpoint(
         path,
         model=restored_model,
