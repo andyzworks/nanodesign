@@ -1,22 +1,23 @@
 # NanoDesign v0 当前实验结果
 
-**状态时间：2026-09-01 21:21 CDT**  
+**状态时间：2026-09-02 11:26 CDT**
 **实验阶段：早期 baseline validation / training-budget calibration**
 
-> 本报告总结 3K 与 9K `samples seen` 的已完成结果，以及 18K 实验的进行中结果。
+> 本报告总结 3K、9K 与 18K `samples seen` 的已完成结果。
 > 当前数字主要是固定 validation set 上的 loss、sequence recovery 和固定样本 generation
 > diagnostic，并不是最终的 Binder / H3 / RNA 外部 benchmark。
 
 ## 1. 结论摘要
 
-- 3K 和 9K budget sweep 已全部完成；9K 包含 seed 17 与 seed 23 两个独立训练重复。
-- 当前最稳定的候选是 **`lr5e4-d16-c10`**：9K 时两个 seed 的 H3 recovery
-  均约为 21%，H3 已出现明确且可复现的 learning signal。
-- Binder 在 9K 的 recovery 约为 8%–10%，只有较弱的 signal。
-- RNA 在 9K 的 recovery 为 17%–24%，跨 seed 不稳定，固定生成仍可能出现单碱基偏置。
-- 9K 因此可以称为“可运行并有部分 learning signal 的工程 baseline”，但还不能称为
-  “三个任务均稳定、非塌缩且通过真实 evaluation 的合格 scientific baseline”。
-- 18K 已从 9K checkpoint 原地继续。两个 D4 配置已完成 18K training；D16 配置仍在运行。
+- 3K、9K 和 18K budget sweep 已全部完成；9K/18K 包含 seed 17 与 seed 23
+  两个独立训练重复。
+- 当前最佳统一候选是 **`lr5e4-d16-c10 @ 18K`**。它的双 seed validation recovery
+  为 Binder 10.29%、H3 18.55%、RNA 22.58%。
+- H3 的 learning signal 最明确；Binder 只小幅超过简单多数类基线；RNA 尚未超过多数类基线。
+- `lr5e4-d16-c10` 的 18K fixed-sample generation 已明显减少 9K 时的序列塌缩，尤其 online
+  权重在两个 seed 的三个 task 上均未产生 homopolymer。
+- 当前可以称为“可训练、生成基本非塌缩、Binder/H3 有 learning signal 的 early baseline”，
+  但尚未完成冻结协议要求的外部结构与界面 evaluation，因此不能报告最终 scientific baseline。
 
 ## 2. 冻结的实验设置
 
@@ -113,11 +114,12 @@ RNAsolo2 是 RNA structural prior，不在这里作为 RNA-target binding ground
 seed 17 online RNA 中单一碱基占 95.2%，说明 9K 仍存在明显的 seed-dependent collapse。
 因此不能仅凭 validation loss 下降把它称为合格 baseline。
 
-## 5. 18K 进行中结果
+## 5. 18K 双 seed 完整结果
 
-18K 不是从头重跑，而是从完全相同配置的 9K checkpoint 原地继续。
+18K 不是从头重跑，而是从完全相同配置的 9K checkpoint 原地继续。八个实验均已完成
+training、EMA generation 和 online generation，运行日志无 traceback、OOM 或配置错误。
 
-### 5.1 已完成的 D4 validation
+### 5.1 每个 seed 的 validation 结果
 
 | Seed | Experiment | Binder loss / rec | H3 loss / rec | RNA loss / rec |
 | ---: | --- | ---: | ---: | ---: |
@@ -125,29 +127,54 @@ seed 17 online RNA 中单一碱基占 95.2%，说明 9K 仍存在明显的 seed-
 | 17 | `af3-d4-c10` | 1.4959 / 8.21% | 0.5980 / 13.17% | 0.8310 / 26.07% |
 | 23 | `lr5e4-d4-c10` | 1.7249 / 9.21% | 0.6773 / 16.05% | 0.8253 / 26.11% |
 | 23 | `af3-d4-c10` | **1.3833 / 8.42%** | 0.6247 / 11.07% | **0.7283 / 26.89%** |
+| 17 | `lr5e4-d16-c10` | 1.5607 / 11.07% | 0.6017 / 21.57% | 0.9102 / 19.22% |
+| 17 | `lr1e3-d16-c10` | 1.4623 / 9.01% | 0.6022 / 12.37% | 0.8355 / 17.23% |
+| 23 | `lr5e4-d16-c10` | 1.6386 / 9.52% | 0.6741 / 15.53% | 0.8095 / 25.95% |
+| 23 | `lr1e3-d16-c10` | 1.6204 / 7.31% | 0.6441 / 15.94% | 0.7555 / 19.52% |
 
-18K D4 validation 中 RNA recovery 已接近或略高于四字母均匀随机的 25%，但固定 generation
-仍可能塌缩。例如 seed 23 的 `af3-d4-c10` EMA RNA 是单碱基序列。因此这仍是部分结果，
-不能视为 RNA task 已通过。
+### 5.2 跨 seed 均值与 task-wise 最优
 
-### 5.2 当前运行进度
+| Experiment | Binder loss / recovery | H3 loss / recovery | RNA loss / recovery |
+| --- | ---: | ---: | ---: |
+| `lr5e4-d4-c10` | 1.6516 / 8.96% | 0.6370 / 14.16% | 0.8660 / 24.23% |
+| `af3-d4-c10` | **1.4396** / 8.32% | **0.6113** / 12.12% | **0.7797 / 26.48%** |
+| `lr5e4-d16-c10` | 1.5996 / **10.29%** | 0.6379 / **18.55%** | 0.8598 / 22.58% |
+| `lr1e3-d16-c10` | 1.5414 / 8.16% | 0.6232 / 14.16% | 0.7955 / 18.38% |
 
-截至本报告状态时间：
+对应的训练集多数残基基线为 Binder 8.96%、H3 14.93%、RNA 27.55%。因此：
 
-- seed 17 D4：18K training 完成，generation 进行中。
-- seed 23 D4：18K training 与 generation 完成。
-- seed 17 D16：约 14,456–14,459 / 18,000 samples。
-- seed 23 D16：约 14,075 / 18,000 samples。
-- 所有 18K resume 日志均无 traceback、OOM 或配置错误。
+- **Protein Binder：** `lr5e4-d16-c10` 最好，10.29%，比多数类基线高 1.33 个百分点。
+- **Antibody H3：** `lr5e4-d16-c10` 最好，18.55%，比多数类基线高 3.62 个百分点。
+- **RNA：** `af3-d4-c10` 最好，26.48%，但仍比多数类基线低 1.07 个百分点。
+
+不同 task 的 validation 最优不是同一个配置。综合三个 task、跨 seed 稳定性和 generation
+塌缩情况，选择 `lr5e4-d16-c10` 作为当前最佳统一候选。
+
+### 5.3 最佳统一候选的 generation diagnostic
+
+下面是 `lr5e4-d16-c10 @ 18K` 在每个 seed 的同一个固定 test sample 上的结果。
+`Max fraction` 是设计区域内最高单残基比例，仅用于诊断塌缩，不是正式 metric。
+
+| Seed | Weights | Binder rec / unique / max | H3 rec / unique / max | RNA rec / unique / max |
+| ---: | --- | ---: | ---: | ---: |
+| 17 | EMA | 15.4% / 5 / 42.3% | 36.4% / 4 / 54.5% | 14.3% / 4 / 38.1% |
+| 17 | Online | 7.7% / 10 / 26.9% | 27.3% / 5 / 45.5% | 19.0% / 4 / 47.6% |
+| 23 | EMA | 15.4% / 8 / 50.0% | 36.4% / 4 / 36.4% | 33.3% / 3 / 47.6% |
+| 23 | Online | 15.4% / 8 / 30.8% | 36.4% / 4 / 36.4% | 23.8% / 4 / 52.4% |
+
+相较 9K，18K 的 online generation 在两个 seed 的三个 task 上均包含多个合法残基类型，
+最大单残基比例为 26.9%–52.4%，没有 homopolymer。需要强调，这仍然只是每个 task 一个
+固定样本的 diagnostic，不能替代完整 test-set evaluation。
 
 ## 6. 为什么当前仍不是最终合格 baseline
 
 当前结果已经证明训练链路可运行，而且 H3 有可复现 learning signal；但按照 NanoDesign v0
 的目标，还缺少以下条件：
 
-1. **三个 task 都要有明确 signal。** H3 已满足；Binder 较弱；RNA 跨 seed 不稳定。
-2. **生成不能明显塌缩。** 9K 和部分 18K generation 仍出现 90%–100% 单残基/单碱基占比。
-3. **需要跨 seed 可复现。** 同一配置在 seed 17 与 23 的 RNA generation 差异仍很大。
+1. **三个 task 都要超过简单基线。** H3 已满足；Binder 仅小幅超过；RNA 尚未超过多数类基线。
+2. **生成诊断样本过少。** 最佳候选的 18K generation 已明显减少塌缩，但每个 task 只有
+   一个固定样本，不能证明整个 test set 都稳定。
+3. **需要跨 seed 可复现。** H3 的 signal 最可靠；Binder 和 RNA 的提升仍有 seed variation。
 4. **需要真实 task evaluation。** 当前尚未对最终候选完整运行 Binder In-silico Success
    Rate、H3 RMSD/DockQ、RNA scTM/scRMSD/DockQ。
 5. **固定样本 generation 不是正式 benchmark。** 当前 generation diagnostic 每个 task 仅使用
@@ -173,7 +200,7 @@ seed 17 online RNA 中单一碱基占 95.2%，说明 9K 仍存在明显的 seed-
 
 ## 9. 当前下一步
 
-1. 等待 18K D16 双 seed training 和 generation 完成。
-2. 比较 9K → 18K 是否真正改善三个 task，而不是只降低 loss。
-3. 只有非塌缩候选才进入完整 Binder / H3 / RNA 外部 evaluator。
-4. 根据三个 task 的 learning signal 与 GPU-hour 成本，选择最小有效固定 budget。
+1. 冻结 `lr5e4-d16-c10 @ 18K` 作为当前统一候选，不再继续盲目扩大 training budget。
+2. 对多个 test samples 运行 generation diagnostic，确认非塌缩不是单样本偶然现象。
+3. 对候选运行完整 Binder / H3 / RNA 外部 evaluator。
+4. 基于真实 task metric 判断 18K 是否可以成为后续实验的固定 budget。
