@@ -110,6 +110,33 @@ def test_distributed_assignment_preserves_task_rotation_and_shards_samples():
     assert not set(first) & set(second)
 
 
+def test_single_task_diagnostic_matches_unified_per_task_sample_exposure():
+    tasks = ["protein_binder", "antibody_h3", "rna"]
+    rows = {task: _rows(task, 7) for task in tasks}
+    for task_index, task in enumerate(tasks):
+        unified = [
+            row_for_rank(
+                rows,
+                tasks,
+                optimizer_step=len(tasks) * occurrence + task_index,
+                rank=0,
+                world_size=1,
+            )["sample_id"]
+            for occurrence in range(12)
+        ]
+        single = [
+            row_for_rank(
+                {task: rows[task]},
+                [task],
+                optimizer_step=occurrence,
+                rank=0,
+                world_size=1,
+            )["sample_id"]
+            for occurrence in range(12)
+        ]
+        assert single == unified
+
+
 def test_fixed_four_way_packing_exposes_same_flattened_samples_at_1_2_4_ranks():
     rows = [_sized_row(f"sample-{index}", index + 8) for index in range(16)]
     packed = size_aware_rank_packing(rows, world_size=4, seed=7, max_context_tokens=384)
