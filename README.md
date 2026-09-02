@@ -35,6 +35,32 @@ known molecular context → design sequence + structure
 
 The complete frozen v0 definition is in the [v0 specification](docs/V0_SPEC.md).
 
+## Current Validation Evidence
+
+NanoDesign-Tiny has completed controlled 3K, 9K, and 18K `samples seen` sweeps. The
+9K and 18K experiments use two independent seeds. The current best unified candidate
+is **`lr5e4-d16-c10 @ 18K`**: a constant `5e-4` learning rate, 16 diffusion
+realizations per complex, gradient clipping at 10, and the unchanged `1 : 1 : 1`
+task mixture.
+
+| Task | 18K validation recovery (two-seed mean) | Training-set majority baseline | Evidence |
+| --- | ---: | ---: | --- |
+| Protein Binder | **10.29%** | 8.96% | modest learning signal |
+| Antibody H3 | **18.55%** | 14.93% | clearest reproducible learning signal |
+| RNA binding | **22.58%** | 27.55% | not yet above the simple baseline |
+
+For the same candidate, fixed-sample online generations at 18K contain multiple valid
+residue types for every task under both seeds; their largest single-residue fractions
+range from 26.9% to 52.4%, with no homopolymer output. This is a substantial improvement
+over the collapsed generations observed at earlier budgets and verifies that the shared
+model can train and generate across all three task paths. It does **not** yet establish
+biological design success: sequence recovery and one fixed generation per task do not
+replace the frozen external evaluation protocols below.
+
+The complete per-seed results, generation diagnostics, limitations, and original run
+locations are recorded in the
+[current NanoDesign v0 results report](docs/NANODESIGN_V0_RESULTS_2026-09-01.md).
+
 ## Data
 
 NanoDesign v0 uses release `nanodesign-v0-data-2026-08-30`. The counts below are
@@ -122,12 +148,11 @@ The model architecture and data pools are fixed. Multi-task sampling uses the fr
 Protein Binder : Antibody H3 : RNA ratio of `1 : 1 : 1`, and training budget is measured
 by global **samples seen**, not by epochs.
 
-The official NanoDesign v0 budget is still being calibrated. The current sweep saves
-checkpoints at 3K, 9K, 18K, and 36K samples seen to find the smallest budget at which
-all three tasks show clear learning signal while remaining inexpensive enough for rapid
-experimentation. Early milestones are learning-signal pilots, not final benchmark
-results; full generation and external evaluation are required before selecting a
-budget.
+The completed calibration compared checkpoints at 3K, 9K, and 18K samples seen.
+**18K is the current early-baseline budget candidate**: it gives the strongest overall
+learning evidence while remaining practical for repeated experiments. It is not yet
+the official scientific benchmark budget because full multi-sample generation and
+external evaluation remain outstanding. NanoDesign does not claim a 36K result.
 
 ## Current Status
 
@@ -136,16 +161,19 @@ budget.
   passed forward, backward, generation, and checkpoint save/load smoke tests.
 - [x] **Evaluation components:** Binder, H3, and RNA end-to-end runners are implemented
   and computationally smoke-tested. A complete formal benchmark has not been reported.
-- [x] **Learning-signal pilot:** held-out losses decreased for all three tasks in pilot
-  runs; this is not a formal scientific result.
+- [x] **Learning-signal calibration:** 3K, 9K, and 18K sweeps are complete. At 18K,
+  Binder and H3 recovery exceed their training-set majority baselines; RNA does not.
 - [x] **Training performance:** feature caching, asynchronous loading, standard/chunked
   execution, DDP, preflight checks, and checkpoint/resume are implemented and tested.
-- [ ] **Budget calibration:** the samples-seen sweep and milestone external evaluations
-  are in progress; no official v0 training budget or final result table is claimed yet.
+- [x] **Early budget candidate:** 18K samples seen is selected for the current unified
+  candidate based on two-seed validation and fixed-sample generation diagnostics.
+- [ ] **Scientific baseline evaluation:** full multi-sample generation and the frozen
+  Binder/H3/RNA external evaluations have not yet been reported.
 
 See the [training profiler](docs/training_profile_h100_batch4.md),
 [standard/chunked equivalence report](docs/training_mode_equivalence_h100.md), and
-[pilot record](docs/baseline_pilot.json) for the current evidence.
+[pilot record](docs/baseline_pilot.json), and
+[18K results report](docs/NANODESIGN_V0_RESULTS_2026-09-01.md) for the current evidence.
 
 ## Quickstart
 
@@ -218,11 +246,11 @@ all three tasks using real processed samples.
 
 ### 4. Train
 
-The current four-GPU calibration command is:
+An example four-GPU samples-seen training command is:
 
 ```bash
 torchrun --standalone --nproc_per_node=4 scripts/train_v0.py \
-  --milestone-samples 3000,9000,18000,36000 \
+  --milestone-samples 3000,9000,18000 \
   --seed 7 \
   --validation-samples-per-task 16 \
   --diffusion-batch-size 4 \
@@ -232,8 +260,9 @@ torchrun --standalone --nproc_per_node=4 scripts/train_v0.py \
   --output-dir runs/budget-sweep-seed7
 ```
 
-These milestones are calibration checkpoints, not an already selected official budget.
-Use `--resume PATH` to resume the same run from a saved checkpoint.
+Use `--resume PATH` to resume the same run from a saved checkpoint. The command is an
+example of the supported four-GPU path; the reported candidate above was screened as
+independent single-GPU runs under two seeds, not produced by this exact command.
 
 ### 5. Generate and evaluate
 
