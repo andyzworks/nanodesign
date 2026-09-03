@@ -1,7 +1,9 @@
 # NanoDesign Evaluator Audit
 
-Status: **audited and frozen as `nanodesign.learnability.v1`**  
-Protocol file: [`configs/evaluation/learnability_v1.json`](../configs/evaluation/learnability_v1.json)  
+Status: **audited and frozen as `nanodesign.learnability.v1`**
+
+Protocol file: [`configs/evaluation/learnability_v1.json`](../configs/evaluation/learnability_v1.json)
+
 Machine-readable audit: `data/runs/nanodesign-v1/evaluator-audit/summary.json`
 
 ## Why this audit was needed

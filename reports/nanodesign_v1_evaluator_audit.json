@@ -1,0 +1,117 @@
+{
+  "checkpoint_metrics": {
+    "0k": {
+      "antibody_h3": {
+        "coordinate_loss": 0.35477646440267563,
+        "coordinate_mse": 0.038518207758897915,
+        "lddt_loss": 0.20070364093407989,
+        "loss": 0.7416492789052427,
+        "seq_recovery": 0.029837144422344863,
+        "sequence_ce": 5.3755735363811255,
+        "sequence_loss": 0.3868728114757687
+      },
+      "protein_binder": {
+        "coordinate_loss": 2.6031183395534754,
+        "coordinate_mse": 0.590105272945948,
+        "lddt_loss": 0.24269723985344172,
+        "loss": 2.98993565607816,
+        "seq_recovery": 0.030688237682625186,
+        "sequence_ce": 4.886029681190848,
+        "sequence_loss": 0.3868172827642411
+      },
+      "rna": {
+        "coordinate_loss": 1.6726274002029236,
+        "coordinate_mse": 0.3622011378048414,
+        "lddt_loss": 0.2238228486244937,
+        "loss": 2.0422699422721404,
+        "seq_recovery": 0.012591242520924074,
+        "sequence_ce": 4.572027223655977,
+        "sequence_loss": 0.3696425262703953
+      }
+    },
+    "18k": {
+      "antibody_h3": {
+        "coordinate_loss": 0.2969717966625467,
+        "coordinate_mse": 0.024395721977271023,
+        "lddt_loss": 0.19938892219215631,
+        "loss": 0.6046366929076612,
+        "seq_recovery": 0.2097883403475862,
+        "sequence_ce": 3.822464302647859,
+        "sequence_loss": 0.307664898049552
+      },
+      "protein_binder": {
+        "coordinate_loss": 1.2540196033660322,
+        "coordinate_mse": 0.2574703282152768,
+        "lddt_loss": 0.22413829481229186,
+        "loss": 1.5653943307697773,
+        "seq_recovery": 0.1122588900179835,
+        "sequence_ce": 3.4907179484143853,
+        "sequence_loss": 0.3113747120369226
+      },
+      "rna": {
+        "coordinate_loss": 0.7775478039879397,
+        "coordinate_mse": 0.14103371835122985,
+        "lddt_loss": 0.213412941220295,
+        "loss": 0.9687115190977074,
+        "seq_recovery": 0.23353689047227422,
+        "sequence_ce": 2.131744160709611,
+        "sequence_loss": 0.19116371071123214
+      }
+    },
+    "9k": {
+      "antibody_h3": {
+        "coordinate_loss": 0.298937497776933,
+        "coordinate_mse": 0.024857103868271224,
+        "lddt_loss": 0.19950909866020083,
+        "loss": 0.6039483093190938,
+        "seq_recovery": 0.21839353226823732,
+        "sequence_ce": 3.727329842746258,
+        "sequence_loss": 0.305010809446685
+      },
+      "protein_binder": {
+        "coordinate_loss": 1.3652035512495786,
+        "coordinate_mse": 0.28459498123265803,
+        "lddt_loss": 0.22682362608611584,
+        "loss": 1.6818533749319613,
+        "seq_recovery": 0.0866589239158202,
+        "sequence_ce": 4.562083445489407,
+        "sequence_loss": 0.31664980796631426
+      },
+      "rna": {
+        "coordinate_loss": 0.8751637813556625,
+        "coordinate_mse": 0.16507699265402842,
+        "lddt_loss": 0.2148558181452464,
+        "loss": 1.0834010483988796,
+        "seq_recovery": 0.1889370311926826,
+        "sequence_ce": 3.37508580052709,
+        "sequence_loss": 0.20823725447597274
+      }
+    }
+  },
+  "determinism": {
+    "maximum_absolute_mean_metric_difference": 0.0,
+    "maximum_absolute_mean_metric_difference_by_repeat": {
+      "18k-repeat-2": 0.0,
+      "18k-repeat-3": 0.0
+    },
+    "passed": true,
+    "repeat_count": 3,
+    "tolerance": 1e-07
+  },
+  "evaluation_wall_time_seconds": {
+    "0k": 117.1372614139691,
+    "18k-repeat-1": 117.05733642494306,
+    "18k-repeat-2": 117.69311892683618,
+    "18k-repeat-3": 118.90004035504535,
+    "9k": 116.57936240499839
+  },
+  "peak_gpu_memory_bytes": {
+    "0k": 51791571968,
+    "18k-repeat-1": 51791571968,
+    "18k-repeat-2": 51791571968,
+    "18k-repeat-3": 51791571968,
+    "9k": 51791571968
+  },
+  "protocol": "nanodesign.learnability.v1",
+  "protocol_sha256": "455c7508c335f11929914fde95e6b503f2061199d0defaa02a1498282d9354a1"
+}
