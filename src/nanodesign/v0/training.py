@@ -246,7 +246,13 @@ def _design_normalized_sequence_mask(mask: torch.Tensor) -> torch.Tensor:
 
 @torch.no_grad()
 def evaluate_loss(model: NanoDesignTiny, batch: Mapping[str, object]) -> dict[str, float]:
-    """Evaluate the same official denoising losses without an optimizer update."""
+    """Evaluate the same official denoising losses without an optimizer update.
+
+    The weighted loss terms are kept for exact continuity with training.  The raw
+    token cross-entropy and coordinate diagnostics are also returned so the frozen
+    learnability evaluator can report continuous, interpretable signals without
+    changing the optimization objective.
+    """
 
     was_training = model.training
     model.train()
@@ -257,12 +263,24 @@ def evaluate_loss(model: NanoDesignTiny, batch: Mapping[str, object]) -> dict[st
         "loss": loss,
         "coordinate_loss": metrics["coordinate_loss"],
         "sequence_loss": metrics["sequence_loss"],
+        "sequence_ce": metrics["token_lvl_sequence_loss"],
         # SequenceLoss already computes recovery on the supervised design mask.
         # Expose that existing cheap signal at budget milestones instead of trying to
         # infer sequence learning from cross-entropy alone.
         "seq_recovery": metrics["seq_recovery"],
     }
-    if not torch.isfinite(torch.stack(tuple(core.values()))).all():
+    for source, destination in (
+        ("mse_loss_mean", "coordinate_mse"),
+        # Foundry's historical metric key says ``mean_lddt``, but the value is
+        # returned by ``smoothed_lddt_loss`` and is lower-is-better.
+        ("mean_lddt", "lddt_loss"),
+    ):
+        value = metrics.get(source)
+        if isinstance(value, torch.Tensor) and value.numel() == 1:
+            core[destination] = value
+    # Foundry can emit detached diagnostic scalars on CPU while the actual loss is
+    # on CUDA.  Check each scalar on its native device rather than stacking devices.
+    if any(not bool(torch.isfinite(value).all()) for value in core.values()):
         raise FloatingPointError("non-finite validation loss")
     return {name: float(value.detach().item()) for name, value in core.items()}
 

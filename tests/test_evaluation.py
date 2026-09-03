@@ -16,7 +16,12 @@ def test_tasks_have_exact_real_primary_metrics():
     } == {"in_silico_success_rate"}
     assert {
         metric.name for metric in PROTOCOLS[Task.ANTIBODY_CDR].metrics if metric.tier == "primary"
-    } == {"h3_aar", "h3_rmsd", "dockq"}
+    } == {"h3_aar", "h3_rmsd"}
+    assert {
+        metric.name
+        for metric in PROTOCOLS[Task.ANTIBODY_CDR].metrics
+        if metric.tier == "auxiliary"
+    } == {"dockq"}
     assert {
         metric.name for metric in PROTOCOLS[Task.RNA_APTAMER].metrics if metric.tier == "primary"
     } == {"sctm", "scrmsd", "structure_confidence", "dockq"}

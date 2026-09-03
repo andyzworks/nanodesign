@@ -1,3 +1,4 @@
+import hashlib
 import random
 
 import torch
@@ -194,3 +195,19 @@ def test_single_task_selection_preserves_canonical_order_and_indices():
     assert train_v0._task_names("protein_binder") == ["protein_binder"]
     assert train_v0._task_names("rna,protein_binder") == ["protein_binder", "rna"]
     assert train_v0.TASK_INDEX == {"protein_binder": 0, "antibody_h3": 1, "rna": 2}
+
+
+def test_overfit_subset_is_fixed_per_task_and_fingerprinted():
+    rows = {
+        "protein_binder": [dict(_row(index), sample_id=f"binder-{index}") for index in range(8)],
+        "rna": [dict(_row(index), sample_id=f"rna-{index}") for index in range(8)],
+    }
+    first, first_sha = train_v0._fixed_overfit_rows(rows, samples_per_task=4, seed=17)
+    second, second_sha = train_v0._fixed_overfit_rows(rows, samples_per_task=4, seed=17)
+
+    assert first == second
+    assert first_sha == second_sha
+    assert set(first_sha) == set(rows)
+    for task, selected in first.items():
+        payload = "".join(f"{row['sample_id']}\n" for row in selected).encode()
+        assert first_sha[task] == hashlib.sha256(payload).hexdigest()

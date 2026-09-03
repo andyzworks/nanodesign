@@ -1,0 +1,30 @@
+{
+  "protocol": "nanodesign.learnability.v1",
+  "description": "Frozen deterministic denoising validation panel; not a true-generation benchmark.",
+  "seed": 17,
+  "selection_seed_offset": 1000,
+  "diffusion_t": 0.5,
+  "diffusion_realizations_per_complex": 1,
+  "coordinate_augmentation": false,
+  "weight_source": "ema",
+  "tasks": {
+    "protein_binder": {
+      "catalog": "data/processed/v0/splits/protein_binder/validation.jsonl",
+      "catalog_sha256": "68bf89ff0feab2aaa2f6712aecc49f6b4ba04aa1f00c5b3fb2ef4c1e07c9bf01",
+      "panel_size": 128,
+      "selected_sample_ids_sha256": "cfd1976f2e5837903253a6b4c2c4e6439f8feb7192e81a2513a86e9631e52750"
+    },
+    "antibody_h3": {
+      "catalog": "data/processed/v0/splits/antibody_h3/validation.jsonl",
+      "catalog_sha256": "b4cb4f073018e3db8a8ce1bb0ab08e20ad46f8a08d40866080f740b303ccb199",
+      "panel_size": 128,
+      "selected_sample_ids_sha256": "f22d3ddddad728317cfcce97e60479fe961e3454ba13e4e3a9d030c326bac73f"
+    },
+    "rna": {
+      "catalog": "data/processed/v0/splits/rna_binding/validation.jsonl",
+      "catalog_sha256": "0257a22f09b72d44b9a585d0f186d283c615a08a5467db245ab8df5247627d5c",
+      "panel_size": 83,
+      "selected_sample_ids_sha256": "3f88b2ee3711346ab820b6fe4a5257f5819b4500c456f54fe6d5798f8cdf8167"
+    }
+  }
+}

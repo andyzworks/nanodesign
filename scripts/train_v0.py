@@ -41,6 +41,7 @@ from nanodesign.v0.distributed import (
     validation_indices,
 )
 from nanodesign.v0.model import STANDARD_MODE_MAX_ATOMS, NanoDesignTiny, NanoDesignTinyConfig
+from nanodesign.v0.results import write_training_result_rows
 from nanodesign.v0.training import (
     ExponentialMovingAverage,
     TrainingConfig,
@@ -128,6 +129,27 @@ def _generation_row(rows: list[dict[str, Any]], *, max_context_tokens: int) -> d
     """Prefer a complete held-out context, with a deterministic smoke fallback."""
 
     return next((row for row in rows if _fixed_context_tokens(row) <= max_context_tokens), rows[0])
+
+
+def _fixed_overfit_rows(
+    rows_by_task: dict[str, list[dict[str, Any]]], *, samples_per_task: int, seed: int
+) -> tuple[dict[str, list[dict[str, Any]]], dict[str, str]]:
+    """Freeze an exact train subset for capacity/recipe sanity experiments."""
+
+    if samples_per_task < 1:
+        raise ValueError("overfit samples per task must be positive")
+    selected = {}
+    fingerprints = {}
+    for task, rows in rows_by_task.items():
+        if samples_per_task > len(rows):
+            raise ValueError(
+                f"{task}: requested {samples_per_task} overfit samples from {len(rows)} rows"
+            )
+        chosen = random.Random(seed + 2000 + TASK_INDEX[task]).sample(rows, samples_per_task)
+        selected[task] = chosen
+        payload = "".join(f"{row['sample_id']}\n" for row in chosen).encode()
+        fingerprints[task] = hashlib.sha256(payload).hexdigest()
+    return selected, fingerprints
 
 
 def _batch(
@@ -368,6 +390,7 @@ def main() -> None:
     )
     parser.add_argument("--data-workers", type=int, default=4)
     parser.add_argument("--data-prefetch-factor", type=int, default=4)
+    parser.add_argument("--feature-cache-lru-size", type=int, default=8)
     parser.add_argument("--data-pin-memory", action=argparse.BooleanOptionalAction, default=True)
     parser.add_argument("--learning-rate", type=float, default=2e-4)
     parser.add_argument(
@@ -408,6 +431,14 @@ def main() -> None:
         default=True,
         help="run the unchanged generation path for the selected task(s) after training",
     )
+    parser.add_argument(
+        "--overfit-samples-per-task",
+        type=int,
+        help=(
+            "freeze this many train rows per selected task and use the same rows for "
+            "training validation and final generation; diagnostic mode only"
+        ),
+    )
     args = parser.parse_args()
     if min(args.validation_samples_per_task, args.diffusion_batch_size) < 1:
         raise ValueError("validation samples and diffusion batch size must be positive")
@@ -417,8 +448,12 @@ def main() -> None:
         raise ValueError("steps must be positive")
     if args.checkpoint_every < 0:
         raise ValueError("checkpoint interval must be non-negative")
-    if args.data_workers < 0 or args.data_prefetch_factor < 1:
-        raise ValueError("data workers must be non-negative and prefetch factor positive")
+    if args.data_workers < 0 or args.data_prefetch_factor < 1 or args.feature_cache_lru_size < 0:
+        raise ValueError(
+            "data workers/cache LRU must be non-negative and prefetch factor positive"
+        )
+    if args.overfit_samples_per_task is not None and args.overfit_samples_per_task < 1:
+        raise ValueError("overfit samples per task must be positive")
     if args.ema_decay != 0.0 and not 0.0 < args.ema_decay < 1.0:
         raise ValueError("EMA decay must be zero (disabled) or between zero and one")
     if args.feature_cache_stage_root is not None and args.feature_cache_root is None:
@@ -495,8 +530,16 @@ def main() -> None:
     stats_path = root / "docs/data_v0_stats.json"
     manifest_sha = hashlib.sha256(stats_path.read_bytes()).hexdigest()
     train_rows = _load_rows(root, "train", task_names)
-    validation_rows = _load_rows(root, "validation", task_names)
-    test_rows = _load_rows(root, "test", task_names)
+    overfit_sample_ids_sha256: dict[str, str] = {}
+    if args.overfit_samples_per_task is not None:
+        train_rows, overfit_sample_ids_sha256 = _fixed_overfit_rows(
+            train_rows, samples_per_task=args.overfit_samples_per_task, seed=args.seed
+        )
+        validation_rows = train_rows
+        test_rows = train_rows
+    else:
+        validation_rows = _load_rows(root, "validation", task_names)
+        test_rows = _load_rows(root, "test", task_names)
     shuffled = {}
     for task, rows in train_rows.items():
         task_index = TASK_INDEX[task]
@@ -540,6 +583,14 @@ def main() -> None:
         "coordinate_augmentation": args.coordinate_augmentation,
         "sequence_mask_normalization": "per_design_token",
     }
+    if args.overfit_samples_per_task is not None:
+        training_run_config.update(
+            {
+                "overfit_samples_per_task": args.overfit_samples_per_task,
+                "overfit_sample_ids_sha256": overfit_sample_ids_sha256,
+                "evaluation_split": "frozen_training_subset",
+            }
+        )
     if args.resume is not None:
         loaded = load_checkpoint(
             args.resume,
@@ -661,7 +712,7 @@ def main() -> None:
             cache_spec,
             cache_root=selected_cache_root,
             allow_fallback=args.feature_cache_fallback,
-            lru_size=8,
+            lru_size=args.feature_cache_lru_size,
             sampling_seeds=sampling_seeds,
         )
         async_loader = build_async_feature_loader(
@@ -995,7 +1046,18 @@ def main() -> None:
             "synchronized_standard_max_atoms": STANDARD_MODE_MAX_ATOMS,
         },
         "validation_samples_per_task": args.validation_samples_per_task,
-        "generation_split": "test",
+        "generation_split": (
+            "frozen_training_subset"
+            if args.overfit_samples_per_task is not None
+            else "test"
+        ),
+        "evaluation_split": (
+            "frozen_training_subset"
+            if args.overfit_samples_per_task is not None
+            else "validation"
+        ),
+        "overfit_samples_per_task": args.overfit_samples_per_task,
+        "overfit_sample_ids_sha256": overfit_sample_ids_sha256,
         "final_generation_enabled": args.final_generation,
         "generation_selection": (
             "first sample with complete fixed context; first-sample fallback for low-budget smoke"
@@ -1028,6 +1090,7 @@ def main() -> None:
                 args.data_prefetch_factor if args.feature_cache_root is not None else None
             ),
             "persistent_workers": bool(args.feature_cache_root and args.data_workers > 0),
+            "lru_size": args.feature_cache_lru_size,
             "pin_memory": bool(
                 args.feature_cache_root and args.data_pin_memory and device.type == "cuda"
             ),
@@ -1036,6 +1099,11 @@ def main() -> None:
     }
     (output_dir / "training_report.json").write_text(
         json.dumps(report, indent=2, sort_keys=True) + "\n", encoding="utf-8"
+    )
+    write_training_result_rows(
+        report,
+        experiment=str(output_dir.resolve()),
+        destination=output_dir / "experiment_results.json",
     )
     print(json.dumps(report, indent=2, sort_keys=True))
     if distributed.world_size > 1:

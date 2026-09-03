@@ -1,0 +1,164 @@
+{
+  "checkpoints": {
+    "18k": {
+      "ema_available": true,
+      "global_samples_per_task": {
+        "antibody_h3": 6000,
+        "protein_binder": 6000,
+        "rna": 6000
+      },
+      "optimizer_steps": 18000,
+      "path": "/gpfs/projects/b1222/userdata/jianshu/code/nanodesign/data/runs/signal-maskfix-matrix-9000-seeds17-23/seed-17/lr5e4-d16-c10/milestones/samples-00018000.pt",
+      "samples_seen": 18000,
+      "sha256": "726a00aab17034b3470ad527970faf21410a657db767ac45679efe97372d404c"
+    },
+    "9k": {
+      "ema_available": true,
+      "global_samples_per_task": {
+        "antibody_h3": 3000,
+        "protein_binder": 3000,
+        "rna": 3000
+      },
+      "optimizer_steps": 9000,
+      "path": "/gpfs/projects/b1222/userdata/jianshu/code/nanodesign/data/runs/signal-maskfix-matrix-9000-seeds17-23/seed-17/lr5e4-d16-c10/milestones/samples-00009000.pt",
+      "samples_seen": 9000,
+      "sha256": "2f4fc6a96cb5128f14eadbe3b26402c49891c222652642f6ddeb7873f08fcedc"
+    },
+    "untrained": {
+      "ema_available": true,
+      "global_samples_per_task": {},
+      "optimizer_steps": 0,
+      "path": "/gpfs/projects/b1222/userdata/jianshu/code/nanodesign/data/runs/signal-maskfix-matrix-9000-seeds17-23/seed-17/lr5e4-d16-c10/milestones/samples-00000000.pt",
+      "samples_seen": 0,
+      "sha256": "24dfbf04b3d2f38eb54a2e894a76ab73f35eed3b993db3e202f10e891e5dc3db"
+    }
+  },
+  "data_manifest_sha256": "6a194c2558c323c9f3f394a4df4ba9856c10a92f42c1ddb5e53ade03cc1cd584",
+  "legacy_validation_panel": {
+    "samples_per_task": 16,
+    "validation_after": {
+      "antibody_h3": {
+        "coordinate_loss": 0.3010845994576812,
+        "loss": 0.6017344798892736,
+        "seq_recovery": 0.2156769223511219,
+        "sequence_loss": 0.3006498832255602
+      },
+      "protein_binder": {
+        "coordinate_loss": 1.259407775476575,
+        "loss": 1.5606756582856178,
+        "seq_recovery": 0.11071308562532067,
+        "sequence_loss": 0.30126786697655916
+      },
+      "rna": {
+        "coordinate_loss": 0.7294211313128471,
+        "loss": 0.9101872518658638,
+        "seq_recovery": 0.19218123145401478,
+        "sequence_loss": 0.18076611775904894
+      }
+    },
+    "validation_before": {
+      "antibody_h3": {
+        "coordinate_loss": 0.3635823503136635,
+        "loss": 0.7439572215080261,
+        "seq_recovery": 0.03248626505956054,
+        "sequence_loss": 0.38037487119436264
+      },
+      "protein_binder": {
+        "coordinate_loss": 2.6694306284189224,
+        "loss": 3.0509420186281204,
+        "seq_recovery": 0.028270041337236762,
+        "sequence_loss": 0.38151135109364986
+      },
+      "rna": {
+        "coordinate_loss": 1.6075497008860111,
+        "loss": 1.9785310849547386,
+        "seq_recovery": 0.013793193153105676,
+        "sequence_loss": 0.37098135612905025
+      }
+    },
+    "warning": "superseded for evaluator audit by frozen learnability.v1 panel"
+  },
+  "model": {
+    "architecture": "pinned RosettaCommons RFD3NA RFD3",
+    "config_sha256": "25c710241a620ce6b50b4033a5cf15481c2549ce05fe3dd6ba6794595426514c",
+    "model_config": {
+      "atom_attention_keys": 64,
+      "atom_decoder_blocks": 2,
+      "atom_encoder_blocks": 2,
+      "c_atom": 64,
+      "c_atompair": 16,
+      "c_s": 128,
+      "c_time": 128,
+      "c_token": 240,
+      "c_z": 64,
+      "diffusion_pairformer_blocks": 1,
+      "diffusion_transformer_blocks": 6,
+      "initializer_pairformer_blocks": 1,
+      "recycle_steps": 1,
+      "sampling_steps": 50
+    },
+    "parameter_count": 6849538
+  },
+  "reported_training_mechanics": {
+    "adam_betas": [
+      0.9,
+      0.95
+    ],
+    "coordinate_augmentation": true,
+    "coordinate_loss_mask": "all_resolved_atoms_foundry_occupancy",
+    "ema_decay": 0.999,
+    "final_learning_rate": 0.0005,
+    "generation_origin": "foundry_fixed_motif_com_with_zeroed_design_coordinates",
+    "gradient_clip": 10.0,
+    "learning_rate": 0.0005,
+    "lr_decay_factor": 1.0,
+    "lr_decay_steps": 0,
+    "lr_schedule": "constant",
+    "lr_warmup_steps": 0,
+    "optimizer": "AdamW",
+    "sequence_mask_normalization": "per_design_token",
+    "validation_and_generation_weights": "ema",
+    "weight_decay": 0.0001
+  },
+  "schema": "nanodesign.reference_state.v1",
+  "selection": {
+    "reason": "frozen current seed-17 lr5e-4 diffusion-batch-16 gradient-clip-10 reference used by the existing 9K/18K reports",
+    "run": "/gpfs/projects/b1222/userdata/jianshu/code/nanodesign/data/runs/signal-maskfix-matrix-9000-seeds17-23/seed-17/lr5e4-d16-c10"
+  },
+  "training_recipe": {
+    "adam_betas": [
+      0.9,
+      0.95
+    ],
+    "coordinate_augmentation": true,
+    "diffusion_batch_size": 16,
+    "ema_decay": 0.999,
+    "feature_cache_enabled": true,
+    "global_batch_size_complexes": 1,
+    "gradient_clip": 10.0,
+    "learning_rate": 0.0005,
+    "lr_decay_factor": 1.0,
+    "lr_decay_steps": 0,
+    "lr_schedule": "constant",
+    "lr_warmup_steps": 0,
+    "max_context_tokens": 384,
+    "milestone_samples": [
+      300,
+      900,
+      3000,
+      9000,
+      18000
+    ],
+    "seed": 17,
+    "sequence_mask_normalization": "per_design_token",
+    "size_packing_version": "catalog-polymer-slots-fixed4-v2",
+    "task_names": [
+      "protein_binder",
+      "antibody_h3",
+      "rna"
+    ],
+    "validation_samples_per_task": 16,
+    "weight_decay": 0.0001,
+    "world_size": 1
+  }
+}

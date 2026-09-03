@@ -64,7 +64,9 @@ PROTOCOLS = {
         (
             MetricSpec("h3_aar", MetricDirection.HIGHER, "primary"),
             MetricSpec("h3_rmsd", MetricDirection.LOWER, "primary"),
-            MetricSpec("dockq", MetricDirection.HIGHER, "primary"),
+            # Whole-complex DockQ remains reported, but fixed framework/antigen
+            # geometry can dominate it. It is not the H3 learnability objective.
+            MetricSpec("dockq", MetricDirection.HIGHER, "auxiliary"),
         ),
         "fixed-framework Kabsch alignment + DockQ v2",
     ),
