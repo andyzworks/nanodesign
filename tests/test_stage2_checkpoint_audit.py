@@ -2,11 +2,28 @@ import pytest
 import torch
 
 from scripts.audit_stage2_checkpoint import (
+    _design_coordinate_metrics,
     _detach_fixed_context_geometry,
     _prediction_metrics,
     _sequence_collapse_metrics,
     _shuffle_fixed_context_sequence,
 )
+
+
+def test_design_coordinate_metrics_use_only_resolved_design_atoms():
+    ground_truth = torch.zeros(1, 4, 3)
+    predicted = ground_truth.clone()
+    predicted[0, 1, 0] = 3.0
+    predicted[0, 2, 0] = 100.0
+    batch = {
+        "ground_truth_positions": ground_truth,
+        "ground_truth_atom_mask": torch.tensor([True, True, True, False]),
+        "ground_truth_sequence_mask": torch.tensor([False, True, False]),
+        "f": {"atom_to_token_map": torch.tensor([0, 1, 2, 1])},
+    }
+    rmsd, coordinates = _design_coordinate_metrics({"X_L": predicted}, batch)
+    assert rmsd == pytest.approx(3.0)
+    assert torch.equal(coordinates, predicted[0, [1]])
 
 
 def test_context_shuffle_changes_only_fixed_sequence_position_association():

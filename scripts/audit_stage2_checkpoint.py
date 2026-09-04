@@ -63,6 +63,25 @@ def _prediction_metrics(
     return recovery, cross_entropy, predictions[0].detach().cpu()
 
 
+def _design_coordinate_metrics(
+    output: dict[str, torch.Tensor], batch: dict[str, Any]
+) -> tuple[float, torch.Tensor]:
+    """Return direct-frame design-atom RMSD and the first denoised realization."""
+
+    coordinates = output["X_L"]
+    ground_truth = batch["ground_truth_positions"]
+    if coordinates.ndim != 3 or ground_truth.shape != coordinates.shape:
+        raise ValueError("predicted and ground-truth coordinates must have shape [D, A, 3]")
+    atom_to_token = batch["f"]["atom_to_token_map"].long()
+    design_token = batch["ground_truth_sequence_mask"].bool()
+    design_atom = design_token[atom_to_token] & batch["ground_truth_atom_mask"].bool()
+    if not bool(design_atom.any()):
+        raise ValueError("coordinate audit requires at least one resolved design atom")
+    delta = coordinates[:, design_atom] - ground_truth[:, design_atom]
+    rmsd = float(delta.square().sum(dim=-1).mean().sqrt().item())
+    return rmsd, coordinates[0, design_atom].detach().float().cpu()
+
+
 def _shuffle_fixed_context_sequence(batch: dict[str, Any]) -> dict[str, Any]:
     shuffled = dict(batch)
     shuffled["f"] = dict(batch["f"])
@@ -137,6 +156,15 @@ def main() -> None:
     parser.add_argument("--weight-source", choices=("ema", "online"), default="ema")
     parser.add_argument("--generation-examples", type=int, default=8)
     parser.add_argument(
+        "--diffusion-t",
+        type=float,
+        default=None,
+        help=(
+            "override the frozen protocol timestep for an explicitly labelled "
+            "Stage-2 diagnostic; the default keeps the frozen protocol unchanged"
+        ),
+    )
+    parser.add_argument(
         "--coordinate-augmentation",
         action=argparse.BooleanOptionalAction,
         default=None,
@@ -146,6 +174,8 @@ def main() -> None:
     args = parser.parse_args()
     if args.generation_examples < 0:
         raise ValueError("generation examples must be non-negative")
+    if args.diffusion_t is not None and args.diffusion_t <= 0:
+        raise ValueError("diffusion timestep must be positive")
 
     # Required by torch.use_deterministic_algorithms for CUDA >= 10.2. Set it
     # before the first CUDA model operation so the audit is self-contained.
@@ -184,8 +214,14 @@ def main() -> None:
     detached_recovery: list[float] = []
     detached_ce: list[float] = []
     detached_prediction_change: list[float] = []
+    correct_design_rmsd: list[float] = []
+    shuffled_design_rmsd: list[float] = []
+    shuffled_coordinate_change: list[float] = []
+    detached_design_rmsd: list[float] = []
+    detached_coordinate_change: list[float] = []
     generations: list[dict[str, Any]] = []
-    diffusion_t = float(protocol["diffusion_t"])
+    protocol_diffusion_t = float(protocol["diffusion_t"])
+    diffusion_t = protocol_diffusion_t if args.diffusion_t is None else args.diffusion_t
     coordinate_augmentation = (
         bool(protocol["coordinate_augmentation"])
         if args.coordinate_augmentation is None
@@ -228,11 +264,17 @@ def main() -> None:
             recovery, cross_entropy, correct_indices = _prediction_metrics(
                 correct_output, batch
             )
+            coordinate_rmsd, correct_coordinates = _design_coordinate_metrics(
+                correct_output, batch
+            )
             shuffled_batch = _shuffle_fixed_context_sequence(batch)
             _seed(sample_seed, device)
             with _precision(device):
                 shuffled_output = model(shuffled_batch)
             shuffled_rec, shuffled_cross_entropy, shuffled_indices = _prediction_metrics(
+                shuffled_output, batch
+            )
+            shuffled_coordinate_rmsd, shuffled_coordinates = _design_coordinate_metrics(
                 shuffled_output, batch
             )
             correct_recovery.append(recovery)
@@ -242,6 +284,18 @@ def main() -> None:
             prediction_change.append(
                 float((correct_indices != shuffled_indices).float().mean().item())
             )
+            correct_design_rmsd.append(coordinate_rmsd)
+            shuffled_design_rmsd.append(shuffled_coordinate_rmsd)
+            shuffled_coordinate_change.append(
+                float(
+                    (correct_coordinates - shuffled_coordinates)
+                    .square()
+                    .sum(dim=-1)
+                    .mean()
+                    .sqrt()
+                    .item()
+                )
+            )
             detached_batch = _detach_fixed_context_geometry(batch)
             _seed(sample_seed, device)
             with _precision(device):
@@ -249,10 +303,24 @@ def main() -> None:
             detached_rec, detached_cross_entropy, detached_indices = _prediction_metrics(
                 detached_output, batch
             )
+            detached_coordinate_rmsd, detached_coordinates = _design_coordinate_metrics(
+                detached_output, batch
+            )
             detached_recovery.append(detached_rec)
             detached_ce.append(detached_cross_entropy)
             detached_prediction_change.append(
                 float((correct_indices != detached_indices).float().mean().item())
+            )
+            detached_design_rmsd.append(detached_coordinate_rmsd)
+            detached_coordinate_change.append(
+                float(
+                    (correct_coordinates - detached_coordinates)
+                    .square()
+                    .sum(dim=-1)
+                    .mean()
+                    .sqrt()
+                    .item()
+                )
             )
 
             if sample_index < min(args.generation_examples, len(rows)):
@@ -280,6 +348,9 @@ def main() -> None:
         "samples_seen": int(checkpoint["samples_seen"]),
         "weight_source": actual_weight_source,
         "protocol": protocol["protocol"],
+        "protocol_diffusion_t": protocol_diffusion_t,
+        "diffusion_t": diffusion_t,
+        "diffusion_t_overridden": args.diffusion_t is not None,
         "coordinate_augmentation": coordinate_augmentation,
         "panel_sample_count": len(rows),
         "context_control": {
@@ -289,6 +360,11 @@ def main() -> None:
             "correct_sequence_ce_mean": float(np.mean(correct_ce)),
             "shuffled_sequence_ce_mean": float(np.mean(shuffled_ce)),
             "prediction_change_fraction_mean": float(np.mean(prediction_change)),
+            "correct_design_coordinate_rmsd_mean": float(np.mean(correct_design_rmsd)),
+            "shuffled_design_coordinate_rmsd_mean": float(np.mean(shuffled_design_rmsd)),
+            "design_coordinate_prediction_change_rmsd_mean": float(
+                np.mean(shuffled_coordinate_change)
+            ),
         },
         "detached_context_control": {
             "definition": (
@@ -298,6 +374,10 @@ def main() -> None:
             "detached_recovery_mean": float(np.mean(detached_recovery)),
             "detached_sequence_ce_mean": float(np.mean(detached_ce)),
             "prediction_change_fraction_mean": float(np.mean(detached_prediction_change)),
+            "detached_design_coordinate_rmsd_mean": float(np.mean(detached_design_rmsd)),
+            "design_coordinate_prediction_change_rmsd_mean": float(
+                np.mean(detached_coordinate_change)
+            ),
         },
         "generation": {
             "sample_count": len(generations),
