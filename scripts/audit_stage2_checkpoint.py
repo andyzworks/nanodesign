@@ -248,8 +248,12 @@ def main() -> None:
         "generation": {
             "sample_count": len(generations),
             "distinct_sequence_count": len(set(generation_sequences)),
-            "dominant_token_fraction_mean": float(np.mean(dominant_fractions)),
-            "dominant_token_fraction_max": float(np.max(dominant_fractions)),
+            "dominant_token_fraction_mean": (
+                float(np.mean(dominant_fractions)) if dominant_fractions else None
+            ),
+            "dominant_token_fraction_max": (
+                float(np.max(dominant_fractions)) if dominant_fractions else None
+            ),
             "samples": generations,
         },
     }
