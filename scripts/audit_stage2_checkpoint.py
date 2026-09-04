@@ -7,6 +7,7 @@ import argparse
 import hashlib
 import json
 import math
+import os
 import random
 from collections import Counter
 from contextlib import nullcontext
@@ -110,6 +111,9 @@ def main() -> None:
     if args.generation_examples < 1:
         raise ValueError("generation examples must be positive")
 
+    # Required by torch.use_deterministic_algorithms for CUDA >= 10.2. Set it
+    # before the first CUDA model operation so the audit is self-contained.
+    os.environ.setdefault("CUBLAS_WORKSPACE_CONFIG", ":4096:8")
     root = Path(__file__).resolve().parents[1]
     resolved = load_config(root / args.config)
     validate_v0_config(resolved).require_ready()
