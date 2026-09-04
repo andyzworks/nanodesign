@@ -28,7 +28,13 @@ export PYTHONPATH="$repo/src:$repo"
 export PYTHONNOUSERSITE=1
 export OMP_NUM_THREADS=4
 export MKL_NUM_THREADS=4
-export RFD3_LOW_MEMORY_MODE=1
+# Use the profiled size-aware execution policy by default.  A caller may still
+# force the mathematically equivalent chunked path when a GPU is shared.
+if [[ "${STAGE3_FORCE_CHUNKED:-0}" == 1 ]]; then
+  export RFD3_LOW_MEMORY_MODE=1
+else
+  unset RFD3_LOW_MEMORY_MODE
+fi
 export PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
 mkdir -p "$run"
 

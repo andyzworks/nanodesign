@@ -20,12 +20,14 @@ Binder and H3 respond strongly to both context controls. For RNA at the official
 training distribution's median noise, target sequence shuffle worsens design RMSD
 from 1.168 Å to 1.212 Å and spatial detachment worsens it to 1.278 Å, proving a
 3D context signal even though native sequence recovery is comparatively insensitive
-to target residue relabeling.
+to target residue relabeling. The frozen Stage-3 128-example untrained controls are
+now complete (Binder 1.54%, H3 1.83%, RNA 5.27% recovery), and all three matched
+single-task training runs have been launched on QGPU3006.
 
 Next Action:
-Freeze the deterministic 128-sample panels, run Binder/H3/RNA single-task 6K
-checkpoints in parallel, then audit loss, recovery, context use, sample-specific
-generation, and collapse before deciding whether the Stage-3 gate passes.
+Complete the running Binder/H3/RNA 6K checkpoints, then audit loss, recovery,
+context use, sample-specific generation, and collapse before deciding whether the
+Stage-3 gate passes.
 
 Last Updated:
-2026-09-04 16:47 CDT
+2026-09-04 17:00 CDT
