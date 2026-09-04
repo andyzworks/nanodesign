@@ -1,0 +1,25 @@
+{
+  "checkpoint": "/gpfs/projects/b1222/userdata/jianshu/code/nanodesign/data/runs/nanodesign-v1/stage2-wave1/rna-all-valid/milestones/samples-00000900.pt",
+  "context_control": {
+    "correct_recovery_mean": 0.2654001049231738,
+    "correct_sequence_ce_mean": 1.44921875,
+    "definition": "cyclic permutation of fixed-context restype over fixed positions",
+    "prediction_change_fraction_mean": 0.016130746284034103,
+    "shuffled_recovery_mean": 0.27221065177582204,
+    "shuffled_sequence_ce_mean": 1.448974609375
+  },
+  "coordinate_augmentation": true,
+  "generation": {
+    "distinct_sequence_count": 0,
+    "dominant_token_fraction_max": null,
+    "dominant_token_fraction_mean": null,
+    "sample_count": 0,
+    "samples": []
+  },
+  "panel_sample_count": 32,
+  "protocol": "nanodesign.learnability.v2",
+  "samples_seen": 900,
+  "schema": "nanodesign.stage2_checkpoint_audit.v1",
+  "task": "rna",
+  "weight_source": "ema"
+}

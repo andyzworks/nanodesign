@@ -77,6 +77,36 @@ def _shuffle_fixed_context_sequence(batch: dict[str, Any]) -> dict[str, Any]:
     return shuffled
 
 
+def _detach_fixed_context_geometry(
+    batch: dict[str, Any], *, displacement: float = 100.0
+) -> dict[str, Any]:
+    """Move only the fixed motif away from the design region.
+
+    The sequence-only control above asks whether residue identities in the fixed
+    context matter.  That is insufficient for structure-conditioned RNA design,
+    where target geometry can be informative even when target residue identities
+    are not.  This second control preserves the internal target geometry and all
+    design-region inputs while breaking the target/design spatial relationship.
+    """
+
+    detached = dict(batch)
+    detached["f"] = dict(batch["f"])
+    fixed_atom = batch["f"]["is_motif_atom_with_fixed_coord"].bool()
+    if int(fixed_atom.sum()) < 1:
+        raise ValueError("context detachment requires at least one fixed atom")
+    shift = torch.zeros(3, dtype=batch["X_noisy_L"].dtype, device=batch["X_noisy_L"].device)
+    shift[0] = displacement
+
+    noisy = batch["X_noisy_L"].clone()
+    noisy[:, fixed_atom] += shift
+    detached["X_noisy_L"] = noisy
+
+    motif_pos = batch["f"]["motif_pos"].clone()
+    motif_pos[fixed_atom] += shift
+    detached["f"]["motif_pos"] = motif_pos
+    return detached
+
+
 def _sequence_collapse_metrics(indices: torch.Tensor) -> dict[str, Any]:
     values = [int(value) for value in indices.tolist()]
     counts = Counter(values)
@@ -151,6 +181,9 @@ def main() -> None:
     correct_ce: list[float] = []
     shuffled_ce: list[float] = []
     prediction_change: list[float] = []
+    detached_recovery: list[float] = []
+    detached_ce: list[float] = []
+    detached_prediction_change: list[float] = []
     generations: list[dict[str, Any]] = []
     diffusion_t = float(protocol["diffusion_t"])
     coordinate_augmentation = (
@@ -209,6 +242,18 @@ def main() -> None:
             prediction_change.append(
                 float((correct_indices != shuffled_indices).float().mean().item())
             )
+            detached_batch = _detach_fixed_context_geometry(batch)
+            _seed(sample_seed, device)
+            with _precision(device):
+                detached_output = model(detached_batch)
+            detached_rec, detached_cross_entropy, detached_indices = _prediction_metrics(
+                detached_output, batch
+            )
+            detached_recovery.append(detached_rec)
+            detached_ce.append(detached_cross_entropy)
+            detached_prediction_change.append(
+                float((correct_indices != detached_indices).float().mean().item())
+            )
 
             if sample_index < min(args.generation_examples, len(rows)):
                 generation_seed = int(protocol["seed"]) + 100_000 + sample_index
@@ -229,7 +274,7 @@ def main() -> None:
     dominant_fractions = [item["dominant_token_fraction"] for item in generations]
     generation_sequences = [tuple(item["token_indices"]) for item in generations]
     result = {
-        "schema": "nanodesign.stage2_checkpoint_audit.v1",
+        "schema": "nanodesign.stage2_checkpoint_audit.v2",
         "task": args.task,
         "checkpoint": str((root / args.checkpoint).resolve()),
         "samples_seen": int(checkpoint["samples_seen"]),
@@ -244,6 +289,15 @@ def main() -> None:
             "correct_sequence_ce_mean": float(np.mean(correct_ce)),
             "shuffled_sequence_ce_mean": float(np.mean(shuffled_ce)),
             "prediction_change_fraction_mean": float(np.mean(prediction_change)),
+        },
+        "detached_context_control": {
+            "definition": (
+                "translate the intact fixed context by +100 Angstrom on x while "
+                "leaving the design region unchanged"
+            ),
+            "detached_recovery_mean": float(np.mean(detached_recovery)),
+            "detached_sequence_ce_mean": float(np.mean(detached_ce)),
+            "prediction_change_fraction_mean": float(np.mean(detached_prediction_change)),
         },
         "generation": {
             "sample_count": len(generations),

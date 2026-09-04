@@ -2,6 +2,7 @@ import pytest
 import torch
 
 from scripts.audit_stage2_checkpoint import (
+    _detach_fixed_context_geometry,
     _prediction_metrics,
     _sequence_collapse_metrics,
     _shuffle_fixed_context_sequence,
@@ -21,6 +22,27 @@ def test_context_shuffle_changes_only_fixed_sequence_position_association():
         shuffled["f"]["restype"][fixed], torch.roll(restype[fixed], shifts=1, dims=0)
     )
     assert torch.equal(batch["f"]["restype"], restype)
+
+
+def test_context_detachment_moves_only_fixed_coordinates():
+    noisy = torch.zeros(1, 4, 3)
+    motif = torch.zeros(4, 3)
+    fixed = torch.tensor([True, False, True, False])
+    batch = {
+        "X_noisy_L": noisy,
+        "f": {
+            "motif_pos": motif,
+            "is_motif_atom_with_fixed_coord": fixed,
+        },
+    }
+    detached = _detach_fixed_context_geometry(batch)
+    expected = torch.tensor([100.0, 0.0, 0.0])
+    assert torch.equal(detached["X_noisy_L"][0, fixed], expected.expand(2, 3))
+    assert torch.equal(detached["f"]["motif_pos"][fixed], expected.expand(2, 3))
+    assert torch.equal(detached["X_noisy_L"][0, ~fixed], noisy[0, ~fixed])
+    assert torch.equal(detached["f"]["motif_pos"][~fixed], motif[~fixed])
+    assert torch.equal(batch["X_noisy_L"], noisy)
+    assert torch.equal(batch["f"]["motif_pos"], motif)
 
 
 def test_prediction_and_collapse_metrics_have_expected_extremes():
