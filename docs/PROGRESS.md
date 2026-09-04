@@ -15,15 +15,17 @@ and RNA panels.
 Latest Key Finding:
 The exact 32-example batch audit passed every target, mask, vocabulary,
 normalization, coordinate-noise, and motif-conditioning invariant. The root
-cause is therefore narrowed to the training recipe/loss coupling rather than a
-label or design-mask misalignment. Eight single-variable Stage 2 diagnostics
-are currently running on QGPU3021 and QGPU3009.
+cause is not a label or design-mask misalignment. A one-example Binder control
+learns strongly online (recent training recovery about 45% at 900 exposures and
+near-zero sequence loss by about 1.5K), while the 32-example 3K runs remain near
+10% and collapsed. This identifies inadequate per-example exposure, compounded
+by short-horizon EMA lag, as the leading bottleneck.
 
 Next Action:
-Remain in Stage 2. Finish the sequence-only, all-valid supervision, Adam, and
-AF3-schedule diagnostics; use the prescribed near-clean sequence-only funnel if
-needed. Do not start the 128-example stage until all Stage 2 PASS conditions are
-met and documented.
+Remain in Stage 2. Measure 32-example learning curves through 6K/12K/24K/48K
+under four controlled Binder recipes while H3/RNA diagnostics finish. Then
+apply the minimum successful recipe/exposure to all three tasks and audit
+context use and generation collapse. Do not start Stage 3 before the gate.
 
 Last Updated:
-2026-09-04 00:10 CDT
+2026-09-04 00:38 CDT
