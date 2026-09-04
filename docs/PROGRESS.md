@@ -23,13 +23,15 @@ from 1.168 Å to 1.212 Å and spatial detachment worsens it to 1.278 Å, proving
 to target residue relabeling. The frozen Stage-3 128-example untrained controls are
 now complete (Binder 1.54%, H3 1.83%, RNA 5.27% recovery), and all three matched
 single-task training runs have been launched on QGPU3006. Durable interim milestones
-reach 15.53% Binder recovery at 3K and 14.85% H3 recovery at 900; RNA has completed
-initial validation but not yet its first trained milestone.
+reach 17.66% Binder recovery at 6K and 14.85% H3 recovery at 900; RNA has written its
+300-sample checkpoint and is validating it. The Binder 6K audit is context-sensitive
+but remains sequence-biased (64.32% mean dominant-token fraction versus 97.40% at
+initialization), so the exact run is continuing to 12K before a Stage-3 decision.
 
 Next Action:
-Complete the running Binder/H3/RNA 6K checkpoints, then audit loss, recovery,
+Complete Binder 12K and the running H3/RNA checkpoints, then audit loss, recovery,
 context use, sample-specific generation, and collapse before deciding whether the
 Stage-3 gate passes.
 
 Last Updated:
-2026-09-04 17:10 CDT
+2026-09-04 17:23 CDT
