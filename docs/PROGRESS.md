@@ -1,7 +1,7 @@
 # NanoDesign Progress
 
-Current Stage: STAGE_2
-Status: PASS
+Current Stage: STAGE_3
+Status: RUNNING
 
 Completed:
 - Stage 0: PASS
@@ -9,8 +9,8 @@ Completed:
 - Stage 2: PASS
 
 Current Goal:
-Complete the Stage-2 record, then read it back before entering Stage 3 and
-validate the retained recipe independently on 128 fixed samples per task.
+Validate the retained Stage-2 reference recipe independently on 128 fixed
+samples for Binder, H3, and RNA without changing any other training variable.
 
 Latest Key Finding:
 Stage 2 passes with the unchanged 6.85M reference architecture and joint recipe.
@@ -23,9 +23,9 @@ from 1.168 Å to 1.212 Å and spatial detachment worsens it to 1.278 Å, proving
 to target residue relabeling.
 
 Next Action:
-Read docs/STAGE_2_LEARNABILITY.md and this file, summarize the retained recipe and
-rejected experiments, then enter Stage 3. Run Binder/H3/RNA 128-sample validation
-in parallel without changing the recipe or evaluator.
+Freeze the deterministic 128-sample panels, run Binder/H3/RNA single-task 6K
+checkpoints in parallel, then audit loss, recovery, context use, sample-specific
+generation, and collapse before deciding whether the Stage-3 gate passes.
 
 Last Updated:
-2026-09-04 16:43 CDT
+2026-09-04 16:47 CDT

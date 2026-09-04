@@ -1,0 +1,30 @@
+{
+  "protocol": "nanodesign.learnability.v2",
+  "description": "Frozen deterministic 128-example training panels in the official centered RFD3NA training frame for Stage-3 scale-up validation only.",
+  "seed": 17,
+  "selection_seed_offset": 2000,
+  "diffusion_t": 0.5,
+  "diffusion_realizations_per_complex": 1,
+  "coordinate_augmentation": true,
+  "weight_source": "ema",
+  "tasks": {
+    "protein_binder": {
+      "catalog": "data/processed/v0/splits/protein_binder/train.jsonl",
+      "catalog_sha256": "47ce8cfd7270c823d7196239924f1542db46419890f7a53f9beb90a7ad48e988",
+      "panel_size": 128,
+      "selected_sample_ids_sha256": "4cece491d057ddcb7b92d1c7a53ecf98e3d5277c6236ebb35ebde581f8df35fc"
+    },
+    "antibody_h3": {
+      "catalog": "data/processed/v0/splits/antibody_h3/train.jsonl",
+      "catalog_sha256": "7fff546a39705ebc4c88be42d21d8b6dad3b7f25f2a85e6a638fb37aa4b255a2",
+      "panel_size": 128,
+      "selected_sample_ids_sha256": "daf1fb135895ad7f8f426c0c5e918646951a5a933c493495604615eee8c7ebb6"
+    },
+    "rna": {
+      "catalog": "data/processed/v0/splits/rna_binding/train.jsonl",
+      "catalog_sha256": "d3a6117d8d35f42a0c73b04978a25c2004d4771170bdf8fcd205dce6eca2feed",
+      "panel_size": 128,
+      "selected_sample_ids_sha256": "415cec9c6b3b4212eb7af8a7ce35401b8ff5aa321941566ac97a937b2dade347"
+    }
+  }
+}
