@@ -8,4 +8,3 @@ that exist in committed artifacts; work in progress is explicitly labelled as su
 ## Entries
 
 - [2026-09-04 — Evaluator correction, 32-sample learnability, and Stage 3 launch](2026-09-04.md)
-
