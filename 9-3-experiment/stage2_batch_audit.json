@@ -1,8 +1,8 @@
 {
   "manifest_sha256": "6a194c2558c323c9f3f394a4df4ba9856c10a92f42c1ddb5e53ade03cc1cd584",
   "passed": true,
-  "protocol": "nanodesign.learnability.v1",
-  "protocol_sha256": "ac44194b76c247256828440e3b0bcc591b2b42808b0981b4e1f7c9f054ab0207",
+  "protocol": "nanodesign.learnability.v2",
+  "protocol_sha256": "dfc63d80f4535ffa0ab3bdeda222cde02b607ca1063c6ad4851f8b3cc90cf9e5",
   "schema": "nanodesign.stage2_batch_audit.v1",
   "tasks": {
     "antibody_h3": {
