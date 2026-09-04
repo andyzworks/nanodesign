@@ -3,7 +3,6 @@ set -euo pipefail
 
 repo=/gpfs/projects/b1222/userdata/jianshu/code/nanodesign
 output="$repo/data/runs/nanodesign-v1/stage2-rna-diagnostics/rna-sequence-only-6000"
-resume="$repo/data/runs/nanodesign-v1/stage2-wave1/rna-sequence-only/milestones/samples-00000900.pt"
 cd "$repo"
 mkdir -p "$output"
 
@@ -35,5 +34,4 @@ exec srun --overlap --jobid=7694689 --nodes=1 --ntasks=1 --cpus-per-task=8 --gpu
     --ema-decay 0.999 \
     --coordinate-augmentation \
     --overfit-samples-per-task 32 \
-    --no-final-generation \
-    --resume "$resume"
+    --no-final-generation

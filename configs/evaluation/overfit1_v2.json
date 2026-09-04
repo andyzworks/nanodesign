@@ -1,0 +1,30 @@
+{
+  "protocol": "nanodesign.learnability.v2",
+  "description": "Deterministic first-example panels for Stage-2 capacity diagnosis only.",
+  "seed": 17,
+  "selection_seed_offset": 2000,
+  "diffusion_t": 0.5,
+  "diffusion_realizations_per_complex": 1,
+  "coordinate_augmentation": true,
+  "weight_source": "ema",
+  "tasks": {
+    "protein_binder": {
+      "catalog": "data/processed/v0/splits/protein_binder/train.jsonl",
+      "catalog_sha256": "47ce8cfd7270c823d7196239924f1542db46419890f7a53f9beb90a7ad48e988",
+      "panel_size": 1,
+      "selected_sample_ids_sha256": "83642972f2a4cde94fbbb4e6d964e488d24920bd60f72586c3e4619b1a613f5d"
+    },
+    "antibody_h3": {
+      "catalog": "data/processed/v0/splits/antibody_h3/train.jsonl",
+      "catalog_sha256": "7fff546a39705ebc4c88be42d21d8b6dad3b7f25f2a85e6a638fb37aa4b255a2",
+      "panel_size": 1,
+      "selected_sample_ids_sha256": "1563aad8a65bd3939e2eb492dba14cb383fc81e703788dc6dddc25702403ac04"
+    },
+    "rna": {
+      "catalog": "data/processed/v0/splits/rna_binding/train.jsonl",
+      "catalog_sha256": "d3a6117d8d35f42a0c73b04978a25c2004d4771170bdf8fcd205dce6eca2feed",
+      "panel_size": 1,
+      "selected_sample_ids_sha256": "95926701051727d030fbc525c20583b35ad0374d3fc69f49fcb8fd7e3411fa09"
+    }
+  }
+}
