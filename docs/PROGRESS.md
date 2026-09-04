@@ -13,31 +13,27 @@ memorization and non-collapsed generation on the frozen 32-example Binder, H3,
 and RNA panels.
 
 Latest Key Finding:
-The original learnability.v1 panel used arbitrary raw PDB coordinate frames,
-while official-style RFD3NA training centers/augments coordinates. On the exact
-same Binder 12K online checkpoint, recovery is 10.14% in the old frame versus
-44.86% in the corrected deterministic centered frame. Under the frozen v2
-protocol, Binder 12K reaches 44.81% recovery (40.47% after context-sequence
-shuffle; 25.79% after spatially detaching the context) and H3 6K reaches 55.69%
-(43.27% shuffled; 36.60% detached). Both generate 8/8 distinct sequences and
-therefore pass their Stage-2 gates. RNA 3K reaches 32.77% recovery but ignores
-the sequence-shuffle control and its generation is still collapsed (mean
-dominant-base fraction 92.30%). The RNA one-example isolation control reaches
-81.44% recovery and generates all four bases (dominant fraction 44.33%), proving
-that the RNA representation/loss/sampler can learn. Using online rather than EMA
-weights at RNA-32/3K only reduces the collapsed dominant fraction from 92.30% to
-84.75%, so EMA lag is not the root cause. Stage 2 is not yet complete.
+The original learnability.v1 coordinate frame was out of distribution; the
+corrected deterministic v2 frame exposes strong Binder and H3 learning. Binder
+12K reaches 44.81% recovery (40.47% after context-sequence shuffle; 25.79%
+after spatial detachment), while H3 6K reaches 55.69% (43.27% shuffled; 36.60%
+detached). Both generate 8/8 distinct sequences and pass their Stage-2 gates.
 
-The RNA-32 sequence-only branch also fails the conditioning gate at 900
-samples: 27.84% correct-context recovery versus 28.92% after sequence shuffle
-and 29.05% after spatial detachment. Raising sequence-loss weight to 1.0 gives
-25.22% at the same budget and is not a consistent shared-recipe improvement.
+RNA 6K now reaches 39.12% recovery and its earlier generation collapse is
+resolved: all 8 generated sequences are distinct, all coordinates are finite,
+and the mean/max dominant-base fractions are 39.70%/47.22%. However, it still
+fails the strict context-use gate: shuffled-context recovery is 39.72% and
+spatially detached-context recovery is 38.94%. The RNA one-example isolation
+control does use context (81.44% correct versus 77.32% shuffled and 60.82%
+detached), so the representation and sampler are capable of doing so. RNA-32
+sequence-only, increased sequence-loss weight, and online rather than EMA
+weights did not solve this gate.
 
 Next Action:
-Remain in Stage 2. Continue the RNA 32-example reference to 6K while running the
-gated near-clean + sequence-only isolation diagnostic, then audit context use
-and 8-sample generation at the saved milestones. Do not start Stage 3 before
-RNA also passes and docs/STAGE_2_LEARNABILITY.md is complete.
+Remain in Stage 2. The RNA-32 reference continuation is at 21.7K/24K samples.
+Audit its 12K and final 24K milestones for context dependence, retaining only a
+checkpoint that passes both context controls and non-collapse generation. Do
+not start Stage 3 before RNA passes and docs/STAGE_2_LEARNABILITY.md is complete.
 
 Last Updated:
-2026-09-04 02:24 CDT
+2026-09-04 13:12 CDT
