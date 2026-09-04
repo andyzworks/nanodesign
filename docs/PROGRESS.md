@@ -23,18 +23,20 @@ from 1.168 Å to 1.212 Å and spatial detachment worsens it to 1.278 Å, proving
 to target residue relabeling. The frozen Stage-3 128-example untrained controls are
 now complete (Binder 1.54%, H3 1.83%, RNA 5.27% recovery), and all three matched
 single-task training runs have been launched on QGPU3006. Durable interim milestones
-reach 22.64% Binder recovery at 12K and 32.59% H3 recovery at 3K; RNA has written its
-300-sample checkpoint and reaches 25.91% recovery. The Binder audits are context-sensitive
-and the mean dominant-token fraction improves from 97.40% at initialization to 64.32%
-at 6K and 49.73% at 12K, but one short example remains at 91.67%; the exact run is
-therefore continuing to 24K before a Stage-3 decision. H3
-already has a strong context response at 3K; RNA-300 has learned a prior but not yet a
-correct-context advantage, so both original runs continue.
+reach 28.31% Binder recovery at 24K, 43.89% H3 recovery at 6K, and 26.19% RNA recovery
+at 900 samples. Binder now passes its task-level gate: correct recovery is 29.38%
+versus 28.71% shuffled and 22.24% detached, coordinate RMSD worsens from 0.296
+Angstrom to 0.321/0.477 Angstrom, and 8/8 finite distinct generations have a maximum
+dominant-token fraction of 47.06%. H3 also passes its task-level 128-example gate at
+6K: correct-context recovery is 42.79% versus 35.03% shuffled and 28.99% detached,
+with 8/8 distinct finite generations and no collapse. RNA-900 has a
+clear loss/recovery signal, but its median-noise audit still lacks a correct-context
+advantage (5.1211 Angstrom correct versus 5.1217 shuffled and 5.0733 detached); the
+original RNA run therefore continues toward 3K and 6K.
 
 Next Action:
-Complete Binder 24K and the running H3/RNA checkpoints, then audit loss, recovery,
-context use, sample-specific generation, and collapse before deciding whether the
-Stage-3 gate passes.
+Complete RNA 3K/6K and its frozen context/generation audits, then decide the Stage-3
+gate. Binder and H3 require no further Stage-3 training.
 
 Last Updated:
-2026-09-04 17:40 CDT
+2026-09-04 18:16 CDT
