@@ -30,6 +30,10 @@ case "$mode" in
     resume="$REPO/data/runs/nanodesign-v1/stage2-binder-followups/binder-joint-seq-w1/milestones/samples-00003000.pt"
     extra=(--sequence-loss-weight 1)
     ;;
+  no-coordinate-augmentation)
+    resume="$REPO/data/runs/nanodesign-v1/stage2-binder-followups/binder-no-coordinate-augmentation/milestones/samples-00003000.pt"
+    extra=(--no-coordinate-augmentation)
+    ;;
   *)
     echo "unknown mode: $mode" >&2
     exit 2
