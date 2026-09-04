@@ -28,11 +28,16 @@ that the RNA representation/loss/sampler can learn. Using online rather than EMA
 weights at RNA-32/3K only reduces the collapsed dominant fraction from 92.30% to
 84.75%, so EMA lag is not the root cause. Stage 2 is not yet complete.
 
+The RNA-32 sequence-only branch also fails the conditioning gate at 900
+samples: 27.84% correct-context recovery versus 28.92% after sequence shuffle
+and 29.05% after spatial detachment. Raising sequence-loss weight to 1.0 gives
+25.22% at the same budget and is not a consistent shared-recipe improvement.
+
 Next Action:
 Remain in Stage 2. Continue the RNA 32-example reference to 6K while running the
-single controlled sequence-only diagnostic, then audit context use and 8-sample
-generation at the saved milestones. Do not start Stage 3 before RNA also passes
-and docs/STAGE_2_LEARNABILITY.md is complete.
+gated near-clean + sequence-only isolation diagnostic, then audit context use
+and 8-sample generation at the saved milestones. Do not start Stage 3 before
+RNA also passes and docs/STAGE_2_LEARNABILITY.md is complete.
 
 Last Updated:
-2026-09-04 01:55 CDT
+2026-09-04 02:24 CDT
