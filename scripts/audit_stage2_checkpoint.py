@@ -106,10 +106,16 @@ def main() -> None:
     parser.add_argument("--feature-cache-root", type=Path, default=Path("data/cache/v0"))
     parser.add_argument("--weight-source", choices=("ema", "online"), default="ema")
     parser.add_argument("--generation-examples", type=int, default=8)
+    parser.add_argument(
+        "--coordinate-augmentation",
+        action=argparse.BooleanOptionalAction,
+        default=None,
+        help="override the protocol coordinate-frame setting for a diagnostic control",
+    )
     parser.add_argument("--device", default="cuda")
     args = parser.parse_args()
-    if args.generation_examples < 1:
-        raise ValueError("generation examples must be positive")
+    if args.generation_examples < 0:
+        raise ValueError("generation examples must be non-negative")
 
     # Required by torch.use_deterministic_algorithms for CUDA >= 10.2. Set it
     # before the first CUDA model operation so the audit is self-contained.
@@ -147,6 +153,11 @@ def main() -> None:
     prediction_change: list[float] = []
     generations: list[dict[str, Any]] = []
     diffusion_t = float(protocol["diffusion_t"])
+    coordinate_augmentation = (
+        bool(protocol["coordinate_augmentation"])
+        if args.coordinate_augmentation is None
+        else args.coordinate_augmentation
+    )
     max_context_tokens = int(resolved["model"]["max_context_tokens"])
     torch.use_deterministic_algorithms(True)
     torch.backends.cudnn.benchmark = False
@@ -169,7 +180,7 @@ def main() -> None:
                     diffusion_batch_size=1,
                     noise_level=diffusion_t,
                     random_seed=sample_seed,
-                    augment_coordinates=False,
+                    augment_coordinates=coordinate_augmentation,
                 ),
             )
             batch = recursive_to_device(batch, device, non_blocking=device.type == "cuda")
@@ -224,6 +235,7 @@ def main() -> None:
         "samples_seen": int(checkpoint["samples_seen"]),
         "weight_source": actual_weight_source,
         "protocol": protocol["protocol"],
+        "coordinate_augmentation": coordinate_augmentation,
         "panel_sample_count": len(rows),
         "context_control": {
             "definition": "cyclic permutation of fixed-context restype over fixed positions",
