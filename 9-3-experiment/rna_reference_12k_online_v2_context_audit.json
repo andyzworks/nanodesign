@@ -1,0 +1,31 @@
+{
+  "checkpoint": "/gpfs/projects/b1222/userdata/jianshu/code/nanodesign/data/runs/nanodesign-v1/stage2-other-tasks-long/rna-reference-24000/milestones/samples-00012000.pt",
+  "context_control": {
+    "correct_recovery_mean": 0.5082291625440121,
+    "correct_sequence_ce_mean": 1.10638427734375,
+    "definition": "cyclic permutation of fixed-context restype over fixed positions",
+    "prediction_change_fraction_mean": 0.03312304509745445,
+    "shuffled_recovery_mean": 0.5121303359046578,
+    "shuffled_sequence_ce_mean": 1.103912353515625
+  },
+  "coordinate_augmentation": true,
+  "detached_context_control": {
+    "definition": "translate the intact fixed context by +100 Angstrom on x while leaving the design region unchanged",
+    "detached_recovery_mean": 0.5015390189364552,
+    "detached_sequence_ce_mean": 1.12457275390625,
+    "prediction_change_fraction_mean": 0.07311465262318961
+  },
+  "generation": {
+    "distinct_sequence_count": 0,
+    "dominant_token_fraction_max": null,
+    "dominant_token_fraction_mean": null,
+    "sample_count": 0,
+    "samples": []
+  },
+  "panel_sample_count": 32,
+  "protocol": "nanodesign.learnability.v2",
+  "samples_seen": 12000,
+  "schema": "nanodesign.stage2_checkpoint_audit.v2",
+  "task": "rna",
+  "weight_source": "online"
+}
