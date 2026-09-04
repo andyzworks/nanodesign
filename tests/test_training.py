@@ -72,6 +72,29 @@ def test_resume_config_accepts_only_a_strict_completed_milestone_extension():
         )
 
 
+def test_resume_config_migrates_only_exact_legacy_hard_coded_recipe_defaults():
+    legacy = {
+        "seed": 17,
+        "milestone_samples": [300, 900, 3000],
+    }
+    requested = {
+        **legacy,
+        "milestone_samples": [300, 900, 3000, 6000],
+        "training_noise_level": None,
+        "optimizer": "adamw",
+        "sequence_supervision": "design",
+        "coordinate_loss_weight": 4.0,
+        "sequence_loss_weight": 0.1,
+    }
+    validate_resume_training_run_config(legacy, requested, samples_seen=3000)
+    with pytest.raises(ValueError, match="configuration mismatch"):
+        validate_resume_training_run_config(
+            legacy,
+            {**requested, "optimizer": "adam"},
+            samples_seen=3000,
+        )
+
+
 def test_pinned_af3_scheduler_uses_official_warmup_and_constant_path_is_unchanged():
     model = _CheckpointModel()
     optimizer = build_optimizer(model, TrainingConfig(learning_rate=1.8e-3))

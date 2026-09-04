@@ -60,12 +60,28 @@ def validate_resume_training_run_config(
 ) -> None:
     """Accept an exact resume or a strict extension of completed milestones."""
 
-    if checkpoint_config == requested_config:
-        return
     if not isinstance(checkpoint_config, Mapping):
         raise TypeError("resume checkpoint training-run configuration must be a mapping")
+    if checkpoint_config == requested_config:
+        return
     checkpoint_copy = dict(checkpoint_config)
     requested_copy = dict(requested_config)
+    # Checkpoints written before the Stage-2 diagnostics did not serialize these
+    # knobs because they were hard-coded.  Filling only their historical values is
+    # a lossless schema migration and lets the exact 3K reference state be extended
+    # without silently accepting a changed recipe.
+    legacy_hard_coded_defaults = {
+        "training_noise_level": None,
+        "optimizer": "adamw",
+        "sequence_supervision": "design",
+        "coordinate_loss_weight": 4.0,
+        "sequence_loss_weight": 0.1,
+    }
+    for key, value in legacy_hard_coded_defaults.items():
+        if key in requested_copy:
+            checkpoint_copy.setdefault(key, value)
+    if checkpoint_copy == requested_copy:
+        return
     checkpoint_milestones = checkpoint_copy.pop("milestone_samples", None)
     requested_milestones = requested_copy.pop("milestone_samples", None)
     extension_is_safe = (
