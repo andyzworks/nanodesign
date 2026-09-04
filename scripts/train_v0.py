@@ -368,6 +368,14 @@ def main() -> None:
         default=4,
         help="EDM realizations per complex (official RFD3NA uses 32; v0 tiny uses 4)",
     )
+    parser.add_argument(
+        "--training-noise-level",
+        type=float,
+        help=(
+            "diagnostic fixed training t; the default samples the unchanged EDM "
+            "distribution"
+        ),
+    )
     parser.add_argument("--max-context-tokens", type=int)
     parser.add_argument("--device", default="cuda")
     parser.add_argument("--output-dir", required=True)
@@ -471,6 +479,8 @@ def main() -> None:
         )
     if args.overfit_samples_per_task is not None and args.overfit_samples_per_task < 1:
         raise ValueError("overfit samples per task must be positive")
+    if args.training_noise_level is not None and args.training_noise_level <= 0:
+        raise ValueError("training noise level must be positive")
     if args.ema_decay != 0.0 and not 0.0 < args.ema_decay < 1.0:
         raise ValueError("EMA decay must be zero (disabled) or between zero and one")
     if args.feature_cache_stage_root is not None and args.feature_cache_root is None:
@@ -584,6 +594,7 @@ def main() -> None:
     training_run_config = {
         "seed": args.seed,
         "diffusion_batch_size": args.diffusion_batch_size,
+        "training_noise_level": args.training_noise_level,
         "max_context_tokens": max_context_tokens,
         "validation_samples_per_task": args.validation_samples_per_task,
         "task_names": task_names,
@@ -727,7 +738,7 @@ def main() -> None:
             manifest_sha256=manifest_sha,
             max_context_tokens=max_context_tokens,
             diffusion_batch_size=args.diffusion_batch_size,
-            noise_level=None,
+            noise_level=args.training_noise_level,
             random_seed=None,
             augment_coordinates=args.coordinate_augmentation,
         )
@@ -905,6 +916,7 @@ def main() -> None:
                 device=device,
                 max_context_tokens=max_context_tokens,
                 diffusion_batch_size=args.diffusion_batch_size,
+                noise_level=args.training_noise_level,
                 augment_coordinates=args.coordinate_augmentation,
             )
         atom_map = batch.get("f", {}).get("atom_to_token_map")
@@ -1044,6 +1056,7 @@ def main() -> None:
         "global_batch_size_complexes": distributed.world_size,
         "world_size": distributed.world_size,
         "diffusion_realizations_per_complex": args.diffusion_batch_size,
+        "training_noise_level": args.training_noise_level,
         "seed": args.seed,
         "device": str(device),
         "model_parameter_count": base_model.parameter_count,
