@@ -1,0 +1,99 @@
+{
+  "manifest_sha256": "6a194c2558c323c9f3f394a4df4ba9856c10a92f42c1ddb5e53ade03cc1cd584",
+  "passed": true,
+  "protocol": "nanodesign.learnability.v1",
+  "protocol_sha256": "ac44194b76c247256828440e3b0bcc591b2b42808b0981b4e1f7c9f054ab0207",
+  "schema": "nanodesign.stage2_batch_audit.v1",
+  "tasks": {
+    "antibody_h3": {
+      "atom_count_range": [
+        3164,
+        5670
+      ],
+      "checks": {
+        "all_valid_supervision_matches_native_targets": true,
+        "design_coordinates_are_noised": true,
+        "design_input_is_gap": true,
+        "design_normalization_mean_is_one": true,
+        "design_target_alphabet": true,
+        "fixed_coordinates_are_not_noised": true,
+        "fixed_input_equals_target": true,
+        "motif_token_classes_agree": true,
+        "one_hot_targets": true,
+        "token_and_atom_masks_agree": true
+      },
+      "design_length_range": [
+        6,
+        24
+      ],
+      "passed": true,
+      "sample_count": 32,
+      "totals": {
+        "atoms": 152558,
+        "design_tokens": 473,
+        "resolved_atoms": 82486,
+        "tokens": 10897
+      }
+    },
+    "protein_binder": {
+      "atom_count_range": [
+        294,
+        1946
+      ],
+      "checks": {
+        "all_valid_supervision_matches_native_targets": true,
+        "design_coordinates_are_noised": true,
+        "design_input_is_gap": true,
+        "design_normalization_mean_is_one": true,
+        "design_target_alphabet": true,
+        "fixed_coordinates_are_not_noised": true,
+        "fixed_input_equals_target": true,
+        "motif_token_classes_agree": true,
+        "one_hot_targets": true,
+        "token_and_atom_masks_agree": true
+      },
+      "design_length_range": [
+        10,
+        66
+      ],
+      "passed": true,
+      "sample_count": 32,
+      "totals": {
+        "atoms": 25060,
+        "design_tokens": 824,
+        "resolved_atoms": 11924,
+        "tokens": 1790
+      }
+    },
+    "rna": {
+      "atom_count_range": [
+        2928,
+        9493
+      ],
+      "checks": {
+        "all_valid_supervision_matches_native_targets": true,
+        "design_coordinates_are_noised": true,
+        "design_input_is_gap": true,
+        "design_normalization_mean_is_one": true,
+        "design_target_alphabet": true,
+        "fixed_coordinates_are_not_noised": true,
+        "fixed_input_equals_target": true,
+        "motif_token_classes_agree": true,
+        "one_hot_targets": true,
+        "token_and_atom_masks_agree": true
+      },
+      "design_length_range": [
+        8,
+        179
+      ],
+      "passed": true,
+      "sample_count": 32,
+      "totals": {
+        "atoms": 188729,
+        "design_tokens": 1681,
+        "resolved_atoms": 105675,
+        "tokens": 12400
+      }
+    }
+  }
+}

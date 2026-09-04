@@ -402,6 +402,23 @@ def main() -> None:
     parser.add_argument("--weight-decay", type=float, default=1e-4)
     parser.add_argument("--adam-beta2", type=float, default=0.95)
     parser.add_argument(
+        "--optimizer",
+        choices=("adamw", "adam"),
+        default="adamw",
+        help="optimizer family; adam is the pinned public RFD3NA choice",
+    )
+    parser.add_argument(
+        "--sequence-supervision",
+        choices=("design", "all_valid"),
+        default="design",
+        help=(
+            "design preserves the current NanoDesign objective; all_valid matches "
+            "Foundry AddGroundTruthSequence"
+        ),
+    )
+    parser.add_argument("--coordinate-loss-weight", type=float, default=4.0)
+    parser.add_argument("--sequence-loss-weight", type=float, default=0.1)
+    parser.add_argument(
         "--gradient-clip",
         type=float,
         default=1.0,
@@ -512,6 +529,10 @@ def main() -> None:
         weight_decay=args.weight_decay,
         gradient_clip=args.gradient_clip,
         adam_beta2=args.adam_beta2,
+        optimizer=args.optimizer,
+        sequence_supervision=args.sequence_supervision,
+        coordinate_loss_weight=args.coordinate_loss_weight,
+        sequence_loss_weight=args.sequence_loss_weight,
     )
     optimizer = build_optimizer(base_model, training_config)
     lr_scheduler = build_learning_rate_scheduler(
@@ -579,9 +600,17 @@ def main() -> None:
         "weight_decay": training_config.weight_decay,
         "gradient_clip": training_config.gradient_clip,
         "adam_betas": [training_config.adam_beta1, training_config.adam_beta2],
+        "optimizer": training_config.optimizer,
         "ema_decay": args.ema_decay,
         "coordinate_augmentation": args.coordinate_augmentation,
-        "sequence_mask_normalization": "per_design_token",
+        "sequence_supervision": training_config.sequence_supervision,
+        "sequence_mask_normalization": (
+            "per_design_token"
+            if training_config.sequence_supervision == "design"
+            else "official_binary_all_valid"
+        ),
+        "coordinate_loss_weight": training_config.coordinate_loss_weight,
+        "sequence_loss_weight": training_config.sequence_loss_weight,
     }
     if args.overfit_samples_per_task is not None:
         training_run_config.update(
@@ -1019,11 +1048,10 @@ def main() -> None:
         "device": str(device),
         "model_parameter_count": base_model.parameter_count,
         "training_mechanics": {
-            "sequence_mask_normalization": "per_design_token",
             "coordinate_loss_mask": "all_resolved_atoms_foundry_occupancy",
             "coordinate_augmentation": args.coordinate_augmentation,
             "generation_origin": "foundry_fixed_motif_com_with_zeroed_design_coordinates",
-            "optimizer": "AdamW",
+            "optimizer": training_config.optimizer,
             "learning_rate": training_config.learning_rate,
             "lr_schedule": args.lr_schedule,
             "lr_warmup_steps": 1000 if args.lr_schedule == "af3" else 0,
@@ -1033,6 +1061,14 @@ def main() -> None:
             "weight_decay": training_config.weight_decay,
             "gradient_clip": training_config.gradient_clip,
             "adam_betas": [training_config.adam_beta1, training_config.adam_beta2],
+            "sequence_supervision": training_config.sequence_supervision,
+            "sequence_mask_normalization": (
+                "per_design_token"
+                if training_config.sequence_supervision == "design"
+                else "official_binary_all_valid"
+            ),
+            "coordinate_loss_weight": training_config.coordinate_loss_weight,
+            "sequence_loss_weight": training_config.sequence_loss_weight,
             "ema_decay": args.ema_decay,
             "validation_and_generation_weights": "ema" if ema is not None else "online",
         },

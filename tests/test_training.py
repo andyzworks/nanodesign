@@ -14,6 +14,7 @@ from nanodesign.v0.training import (
     _assert_model_matches_resolved_config,
     _design_normalized_sequence_mask,
     _official_generation_coordinates,
+    _sequence_supervision_mask,
     build_learning_rate_scheduler,
     build_optimizer,
     capture_rng_state,
@@ -30,6 +31,18 @@ def test_training_config_rejects_invalid_optimizer_values():
         TrainingConfig(learning_rate=0)
     with pytest.raises(ValueError, match="invalid"):
         TrainingConfig(gradient_clip=0)
+    with pytest.raises(ValueError, match="optimizer"):
+        TrainingConfig(optimizer="sgd")
+    with pytest.raises(ValueError, match="sequence supervision"):
+        TrainingConfig(sequence_supervision="context")
+    with pytest.raises(ValueError, match="at least one"):
+        TrainingConfig(coordinate_loss_weight=0, sequence_loss_weight=0)
+
+
+def test_build_optimizer_preserves_adamw_default_and_supports_official_adam_control():
+    model = _CheckpointModel()
+    assert isinstance(build_optimizer(model), torch.optim.AdamW)
+    assert isinstance(build_optimizer(model, TrainingConfig(optimizer="adam")), torch.optim.Adam)
 
 
 def test_resume_config_accepts_only_a_strict_completed_milestone_extension():
@@ -83,6 +96,19 @@ def test_sequence_mask_is_normalized_over_design_tokens_only():
     assert torch.isclose((weights * token_losses).mean(), torch.tensor(2.0))
     with pytest.raises(ValueError, match="at least one"):
         _design_normalized_sequence_mask(torch.zeros(3, dtype=torch.bool))
+
+
+def test_sequence_supervision_can_match_official_all_valid_rule():
+    sequence = torch.tensor([0, 20, 21, 25, 30, 31])
+    design = torch.tensor([False, True, True, False, False, False])
+    assert torch.equal(
+        _sequence_supervision_mask(sequence, design, mode="all_valid"),
+        torch.tensor([True, False, True, False, False, False]),
+    )
+    assert torch.equal(
+        _sequence_supervision_mask(sequence, design, mode="design"),
+        torch.tensor([0.0, 3.0, 3.0, 0.0, 0.0, 0.0]),
+    )
 
 
 def test_regular_generation_centers_fixed_context_and_removes_native_design_coordinates():

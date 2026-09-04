@@ -10,7 +10,7 @@ from collections.abc import Mapping
 from contextlib import contextmanager
 from dataclasses import asdict, dataclass
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 
 import gemmi
 import numpy as np
@@ -28,6 +28,10 @@ class TrainingConfig:
     gradient_clip: float = 1.0
     adam_beta1: float = 0.9
     adam_beta2: float = 0.95
+    optimizer: Literal["adamw", "adam"] = "adamw"
+    sequence_supervision: Literal["design", "all_valid"] = "design"
+    coordinate_loss_weight: float = 4.0
+    sequence_loss_weight: float = 0.1
 
     def __post_init__(self) -> None:
         if (
@@ -36,8 +40,16 @@ class TrainingConfig:
             or self.gradient_clip <= 0
             or not 0 <= self.adam_beta1 < 1
             or not 0 <= self.adam_beta2 < 1
+            or self.coordinate_loss_weight < 0
+            or self.sequence_loss_weight < 0
         ):
             raise ValueError("invalid optimizer or gradient-clipping configuration")
+        if self.optimizer not in {"adamw", "adam"}:
+            raise ValueError("optimizer must be adamw or adam")
+        if self.sequence_supervision not in {"design", "all_valid"}:
+            raise ValueError("sequence supervision must be design or all_valid")
+        if self.coordinate_loss_weight == 0 and self.sequence_loss_weight == 0:
+            raise ValueError("at least one training loss must have positive weight")
 
 
 def validate_resume_training_run_config(
@@ -149,7 +161,7 @@ def train_step(
     model.train()
     optimizer.zero_grad(set_to_none=True)
     output = model(batch)
-    loss, metrics = _compute_rfd3na_loss(batch, output)
+    loss, metrics = _compute_rfd3na_loss(batch, output, config=config)
     core_losses = torch.stack((loss, metrics["coordinate_loss"], metrics["sequence_loss"]))
     if not torch.isfinite(core_losses).all():
         raise FloatingPointError("non-finite RFD3NA coordinate or sequence loss")
@@ -175,8 +187,12 @@ def train_step(
 
 
 def _compute_rfd3na_loss(
-    batch: Mapping[str, object], output: Mapping[str, torch.Tensor]
+    batch: Mapping[str, object],
+    output: Mapping[str, torch.Tensor],
+    *,
+    config: TrainingConfig | None = None,
 ) -> tuple[torch.Tensor, dict[str, torch.Tensor]]:
+    config = config or TrainingConfig()
     try:
         from rfd3na.metrics.losses import DiffusionLoss, SequenceLoss
     except ImportError as error:
@@ -193,17 +209,23 @@ def _compute_rfd3na_loss(
         for value in (gt_positions, gt_atom_mask, gt_sequence, gt_sequence_mask)
     ):
         raise TypeError("batch is missing tensor ground truth")
+    sequence_indices = gt_sequence.argmax(dim=-1)
+    sequence_valid_mask = _sequence_supervision_mask(
+        sequence_indices,
+        gt_sequence_mask,
+        mode=config.sequence_supervision,
+    )
     loss_input = {
         "X_gt_L_in_input_frame": gt_positions,
         "crd_mask_L": gt_atom_mask,
         "is_original_unindexed_token": torch.zeros(
             gt_sequence.shape[0], dtype=torch.bool, device=gt_sequence.device
         ),
-        "seq_token_lvl": gt_sequence.argmax(dim=-1),
-        "sequence_valid_mask": _design_normalized_sequence_mask(gt_sequence_mask),
+        "seq_token_lvl": sequence_indices,
+        "sequence_valid_mask": sequence_valid_mask,
     }
     coordinate_loss_module = DiffusionLoss(
-        weight=4.0,
+        weight=config.coordinate_loss_weight,
         sigma_data=16.0,
         lddt_weight=0.25,
         alpha_virtual_atom=1.0,
@@ -211,7 +233,7 @@ def _compute_rfd3na_loss(
         alpha_ligand=10.0,
         lp_weight=0.0,
     )
-    sequence_loss_module = SequenceLoss(weight=0.1, max_t=1.0)
+    sequence_loss_module = SequenceLoss(weight=config.sequence_loss_weight, max_t=1.0)
     coordinate_loss, coordinate_metrics = coordinate_loss_module(batch, output, loss_input)
     sequence_loss, sequence_metrics = sequence_loss_module(batch, output, loss_input)
     loss = coordinate_loss + sequence_loss
@@ -242,6 +264,27 @@ def _design_normalized_sequence_mask(mask: torch.Tensor) -> torch.Tensor:
     if not bool(count > 0):
         raise ValueError("sequence design mask must contain at least one token")
     return weights * (weights.numel() / count)
+
+
+def _sequence_supervision_mask(
+    sequence_indices: torch.Tensor,
+    design_mask: torch.Tensor,
+    *,
+    mode: Literal["design", "all_valid"],
+) -> torch.Tensor:
+    """Select the current design-only or public Foundry sequence target mask."""
+
+    if sequence_indices.ndim != 1 or design_mask.shape != sequence_indices.shape:
+        raise ValueError("sequence targets and design mask must be matching vectors")
+    if mode == "design":
+        return _design_normalized_sequence_mask(design_mask)
+    if mode != "all_valid":
+        raise ValueError("sequence supervision must be design or all_valid")
+    # Foundry AddGroundTruthSequence excludes UNK, RNA X, DNA DX, and GAP.
+    invalid_indices = torch.as_tensor(
+        (20, 25, 30, 31), dtype=sequence_indices.dtype, device=sequence_indices.device
+    )
+    return ~torch.isin(sequence_indices, invalid_indices)
 
 
 @torch.no_grad()
@@ -507,7 +550,8 @@ def build_optimizer(
     model: NanoDesignTiny, config: TrainingConfig | None = None
 ) -> torch.optim.Optimizer:
     config = config or TrainingConfig()
-    return torch.optim.AdamW(
+    optimizer_class = torch.optim.AdamW if config.optimizer == "adamw" else torch.optim.Adam
+    return optimizer_class(
         model.parameters(),
         lr=config.learning_rate,
         weight_decay=config.weight_decay,
