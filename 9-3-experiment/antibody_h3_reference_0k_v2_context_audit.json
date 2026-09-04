@@ -9,6 +9,12 @@
     "shuffled_sequence_ce_mean": 3.5654296875
   },
   "coordinate_augmentation": true,
+  "detached_context_control": {
+    "definition": "translate the intact fixed context by +100 Angstrom on x while leaving the design region unchanged",
+    "detached_recovery_mean": 0.017931272042915225,
+    "detached_sequence_ce_mean": 3.568359375,
+    "prediction_change_fraction_mean": 0.024888870306313038
+  },
   "generation": {
     "distinct_sequence_count": 0,
     "dominant_token_fraction_max": null,
@@ -19,7 +25,7 @@
   "panel_sample_count": 32,
   "protocol": "nanodesign.learnability.v2",
   "samples_seen": 0,
-  "schema": "nanodesign.stage2_checkpoint_audit.v1",
+  "schema": "nanodesign.stage2_checkpoint_audit.v2",
   "task": "antibody_h3",
   "weight_source": "online"
 }
