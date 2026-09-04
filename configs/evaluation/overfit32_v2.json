@@ -1,0 +1,30 @@
+{
+  "protocol": "nanodesign.learnability.v2",
+  "description": "Frozen deterministic 32-example training panels in the official centered RFD3NA training frame for overfit diagnosis only.",
+  "seed": 17,
+  "selection_seed_offset": 2000,
+  "diffusion_t": 0.5,
+  "diffusion_realizations_per_complex": 1,
+  "coordinate_augmentation": true,
+  "weight_source": "ema",
+  "tasks": {
+    "protein_binder": {
+      "catalog": "data/processed/v0/splits/protein_binder/train.jsonl",
+      "catalog_sha256": "47ce8cfd7270c823d7196239924f1542db46419890f7a53f9beb90a7ad48e988",
+      "panel_size": 32,
+      "selected_sample_ids_sha256": "13804742f470cab175d73151a4a9458a6fe70381aa68843efb1271e0a88a6910"
+    },
+    "antibody_h3": {
+      "catalog": "data/processed/v0/splits/antibody_h3/train.jsonl",
+      "catalog_sha256": "7fff546a39705ebc4c88be42d21d8b6dad3b7f25f2a85e6a638fb37aa4b255a2",
+      "panel_size": 32,
+      "selected_sample_ids_sha256": "81e135978e74111d0a9c957c2b304bb0a4b62f4bcf240d6e9bd040d067c6c166"
+    },
+    "rna": {
+      "catalog": "data/processed/v0/splits/rna_binding/train.jsonl",
+      "catalog_sha256": "d3a6117d8d35f42a0c73b04978a25c2004d4771170bdf8fcd205dce6eca2feed",
+      "panel_size": 32,
+      "selected_sample_ids_sha256": "1bacc6ba1b235757549401898d2aa87b48bbd046a9dff0ff44db3152b5841013"
+    }
+  }
+}

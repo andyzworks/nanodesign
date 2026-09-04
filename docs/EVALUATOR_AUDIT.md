@@ -1,8 +1,23 @@
 # NanoDesign Evaluator Audit
 
-Status: **audited and frozen as `nanodesign.learnability.v1`**
+Status: **audited; v1 archived after the Stage 2 coordinate-frame erratum**
 
-Protocol file: [`configs/evaluation/learnability_v1.json`](../configs/evaluation/learnability_v1.json)
+> **Stage 2 erratum (2026-09-04):** the original `learnability.v1`
+> protocol left structures in their arbitrary deposited PDB coordinate frame,
+> whereas official-style RFD3NA training centers and rigidly augments every
+> example. Because RFD3 directly embeds scaled coordinates, v1 was out of
+> distribution and strongly suppressed trained-model signal. It is retained as
+> an immutable historical record; all subsequent stages use the versioned
+> [`learnability_v2.json`](../configs/evaluation/learnability_v2.json), which
+> keeps the same panels, seed, and `t=0.5` but deterministically applies the
+> pinned training-frame augmentation. On the Binder 12K online checkpoint,
+> recovery changed from 10.14% (v1 frame) to 44.86% (v2 frame); shuffled-context
+> recovery was 38.88%. This correction changes no data row, target, model,
+> training loss, or true-generation metric.
+
+Historical protocol file: [`configs/evaluation/learnability_v1.json`](../configs/evaluation/learnability_v1.json)
+
+Current protocol file: [`configs/evaluation/learnability_v2.json`](../configs/evaluation/learnability_v2.json)
 
 Machine-readable audit: `data/runs/nanodesign-v1/evaluator-audit/summary.json`
 
@@ -133,7 +148,7 @@ of a strong unified reference baseline.
 
 ```bash
 PYTHONPATH=src:. data/envs/rfd3na312/bin/python scripts/evaluate_learnability.py \
-  --protocol configs/evaluation/learnability_v1.json \
+  --protocol configs/evaluation/learnability_v2.json \
   --checkpoint CHECKPOINT.pt \
   --output evaluation.json
 

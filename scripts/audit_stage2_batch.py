@@ -25,7 +25,7 @@ def _sha256(path: Path) -> str:
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
-        "--protocol", type=Path, default=Path("configs/evaluation/overfit32_v1.json")
+        "--protocol", type=Path, default=Path("configs/evaluation/overfit32_v2.json")
     )
     parser.add_argument("--cache-root", type=Path, default=Path("data/cache/v0"))
     parser.add_argument("--output", type=Path, required=True)

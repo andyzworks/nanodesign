@@ -101,7 +101,7 @@ def main() -> None:
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--config", type=Path, default=Path("configs/v0.yaml"))
     parser.add_argument(
-        "--protocol", type=Path, default=Path("configs/evaluation/overfit32_v1.json")
+        "--protocol", type=Path, default=Path("configs/evaluation/overfit32_v2.json")
     )
     parser.add_argument("--feature-cache-root", type=Path, default=Path("data/cache/v0"))
     parser.add_argument("--weight-source", choices=("ema", "online"), default="ema")

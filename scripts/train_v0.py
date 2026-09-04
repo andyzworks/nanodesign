@@ -229,6 +229,7 @@ def _validation(
                                     max_context_tokens=max_context_tokens,
                                     diffusion_batch_size=1,
                                     noise_level=0.5,
+                                    augment_coordinates=True,
                                 ),
                             ),
                             device,
@@ -244,6 +245,7 @@ def _validation(
                         device=device,
                         max_context_tokens=max_context_tokens,
                         noise_level=0.5,
+                        augment_coordinates=True,
                     )
                 atom_map = batch.get("f", {}).get("atom_to_token_map")
                 if not isinstance(atom_map, torch.Tensor):

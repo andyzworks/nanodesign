@@ -45,7 +45,10 @@ def load_frozen_panel(
     if not protocol_path.is_absolute():
         protocol_path = root / protocol_path
     protocol = json.loads(protocol_path.read_text(encoding="utf-8"))
-    if protocol.get("protocol") != "nanodesign.learnability.v1":
+    if protocol.get("protocol") not in {
+        "nanodesign.learnability.v1",
+        "nanodesign.learnability.v2",
+    }:
         raise ValueError("unsupported learnability protocol")
     seed = int(protocol["seed"])
     selection_seed_offset = int(protocol.get("selection_seed_offset", 1000))
