@@ -39,6 +39,25 @@ export PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
 mkdir -p "$run"
 
 if [[ ! -s "$checkpoint" ]]; then
+  resume_args=()
+  latest_checkpoint=""
+  latest_step=0
+  for candidate in "$run"/milestones/samples-*.pt "$run"/checkpoints/step-*.pt; do
+    [[ -s "$candidate" ]] || continue
+    filename="${candidate##*/}"
+    numeric="${filename##*-}"
+    numeric="${numeric%.pt}"
+    step=$((10#$numeric))
+    if (( step > latest_step )); then
+      latest_step="$step"
+      latest_checkpoint="$candidate"
+    fi
+  done
+  if (( latest_step > 0 )); then
+    echo "resuming Stage 3 ${task} from ${latest_checkpoint}" >&2
+    resume_args=(--resume "$latest_checkpoint")
+  fi
+
   "$python" scripts/train_v0.py \
     --tasks "$task" \
     --milestone-samples 300,900,3000,6000 \
@@ -64,7 +83,8 @@ if [[ ! -s "$checkpoint" ]]; then
     --ema-decay 0.999 \
     --coordinate-augmentation \
     --overfit-samples-per-task 128 \
-    --no-final-generation
+    --no-final-generation \
+    "${resume_args[@]}"
 fi
 
 "$python" scripts/audit_stage2_checkpoint.py \

@@ -22,7 +22,9 @@ from 1.168 Å to 1.212 Å and spatial detachment worsens it to 1.278 Å, proving
 3D context signal even though native sequence recovery is comparatively insensitive
 to target residue relabeling. The frozen Stage-3 128-example untrained controls are
 now complete (Binder 1.54%, H3 1.83%, RNA 5.27% recovery), and all three matched
-single-task training runs have been launched on QGPU3006.
+single-task training runs have been launched on QGPU3006. Durable interim milestones
+reach 15.53% Binder recovery at 3K and 14.85% H3 recovery at 900; RNA has completed
+initial validation but not yet its first trained milestone.
 
 Next Action:
 Complete the running Binder/H3/RNA 6K checkpoints, then audit loss, recovery,
@@ -30,4 +32,4 @@ context use, sample-specific generation, and collapse before deciding whether th
 Stage-3 gate passes.
 
 Last Updated:
-2026-09-04 17:00 CDT
+2026-09-04 17:10 CDT
