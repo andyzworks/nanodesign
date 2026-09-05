@@ -13,38 +13,20 @@ Validate the retained Stage-2 reference recipe independently on 128 fixed
 samples for Binder, H3, and RNA without changing any other training variable.
 
 Latest Key Finding:
-Stage 2 passes with the unchanged 6.85M reference architecture and joint recipe.
-Binder 12K, H3 6K, and RNA 24K reach 44.81%, 55.69%, and 70.13% recovery on the
-frozen overfit panels. All produce 8/8 distinct sequences with finite coordinates.
-Binder and H3 respond strongly to both context controls. For RNA at the official
-training distribution's median noise, target sequence shuffle worsens design RMSD
-from 1.168 Å to 1.212 Å and spatial detachment worsens it to 1.278 Å, proving a
-3D context signal even though native sequence recovery is comparatively insensitive
-to target residue relabeling. The frozen Stage-3 128-example untrained controls are
-now complete (Binder 1.54%, H3 1.83%, RNA 5.27% recovery), and all three matched
-single-task training runs have been launched on QGPU3006. Durable interim milestones
-reach 28.31% Binder recovery at 24K, 43.89% H3 recovery at 6K, and 26.19% RNA recovery
-at 900 samples. Binder now passes its task-level gate: correct recovery is 29.38%
-versus 28.71% shuffled and 22.24% detached, coordinate RMSD worsens from 0.296
-Angstrom to 0.321/0.477 Angstrom, and 8/8 finite distinct generations have a maximum
-dominant-token fraction of 47.06%. H3 also passes its task-level 128-example gate at
-6K: correct-context recovery is 42.79% versus 35.03% shuffled and 28.99% detached,
-with 8/8 distinct finite generations and no collapse. RNA reaches 27.83% validation
-recovery at 3K with validation loss 0.7010 and coordinate loss 0.5626. Its frozen 3K
-median-noise audit now moves in the adverse direction, but only weakly: coordinate
-RMSD is 2.6663 Angstrom with correct context versus 2.6673 shuffled and 2.6715
-detached. Near-clean recovery is 27.99% correct versus 27.89% shuffled and 28.19%
-detached. This is not yet a reliable context advantage, so the unchanged RNA run
-continues toward 6K. The completed 3K generation audit also confirms severe
-homopolymer collapse: all 8 generations have a 100% dominant-token fraction and only
-one unique token internally. The reported 8/8 distinct sequence tuples arise only
-from different output lengths and are not evidence of diversity.
+Binder passes its 128-example task gate at 24K (28.31% validation recovery), and H3
+passes at 6K (43.89%). RNA improves continuously from 5.90% untrained recovery to
+37.02% at 12K while validation loss falls from 1.8746 to 0.5259. RNA generation
+collapse is resolved at 12K: all 8 sequences are distinct and finite, all use at
+least three base types, and mean/maximum dominant-token fractions are 67.24%/87.50%.
+At median training noise, RNA coordinate RMSD is 1.6435 Angstrom with correct context,
+1.6464 shuffled, and 1.7020 detached. Spatial detachment is clearly adverse, but the
+target-sequence-shuffle margin remains too weak for the stated Stage-3 gate. The
+unchanged RNA run therefore continues to 24K; Stage 3 remains RUNNING.
 
 Next Action:
-Complete RNA 6K and its frozen context/generation audits, then decide the Stage-3
-gate. Binder and H3 require no further Stage-3 training; the RNA 3K checkpoint and
-both deterministic context audits are complete, and its failed generation-collapse
-control is now recorded.
+Complete RNA 24K and its already-queued frozen context/generation audits, then decide
+the Stage-3 gate. Binder and H3 require no further Stage-3 training. Do not enter
+Stage 4 before `docs/STAGE_3_128_SAMPLE.md` is written with a PASS decision.
 
 Last Updated:
-2026-09-04 21:48 CDT
+2026-09-05 16:51 CDT

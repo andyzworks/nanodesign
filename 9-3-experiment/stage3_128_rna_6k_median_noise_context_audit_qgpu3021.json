@@ -1,0 +1,39 @@
+{
+  "checkpoint": "/gpfs/projects/b1222/userdata/jianshu/code/nanodesign/data/runs/nanodesign-v1/stage3-128/rna-reference-6000/milestones/samples-00006000.pt",
+  "context_control": {
+    "correct_design_coordinate_rmsd_mean": 1.9022627910599113,
+    "correct_recovery_mean": 0.28121775842737406,
+    "correct_sequence_ce_mean": 1.38153076171875,
+    "definition": "cyclic permutation of fixed-context restype over fixed positions",
+    "design_coordinate_prediction_change_rmsd_mean": 0.10218808549689129,
+    "prediction_change_fraction_mean": 0.007978767636814155,
+    "shuffled_design_coordinate_rmsd_mean": 1.904348235577345,
+    "shuffled_recovery_mean": 0.28161910583730787,
+    "shuffled_sequence_ce_mean": 1.38116455078125
+  },
+  "coordinate_augmentation": true,
+  "detached_context_control": {
+    "definition": "translate the intact fixed context by +100 Angstrom on x while leaving the design region unchanged",
+    "design_coordinate_prediction_change_rmsd_mean": 0.4670105498516932,
+    "detached_design_coordinate_rmsd_mean": 1.9319521533325315,
+    "detached_recovery_mean": 0.28158455225639045,
+    "detached_sequence_ce_mean": 1.38116455078125,
+    "prediction_change_fraction_mean": 0.05581995049578836
+  },
+  "diffusion_t": 4.819107390595234,
+  "diffusion_t_overridden": true,
+  "generation": {
+    "distinct_sequence_count": 0,
+    "dominant_token_fraction_max": null,
+    "dominant_token_fraction_mean": null,
+    "sample_count": 0,
+    "samples": []
+  },
+  "panel_sample_count": 128,
+  "protocol": "nanodesign.learnability.v2",
+  "protocol_diffusion_t": 0.5,
+  "samples_seen": 6000,
+  "schema": "nanodesign.stage2_checkpoint_audit.v2",
+  "task": "rna",
+  "weight_source": "ema"
+}

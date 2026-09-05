@@ -7,4 +7,5 @@ that exist in committed artifacts; work in progress is explicitly labelled as su
 
 ## Entries
 
+- [2026-09-05 — Stage 3 Binder/H3 passes and RNA 12K continuation](9-5-progress.md)
 - [2026-09-04 — Evaluator correction, 32-sample learnability, and Stage 3 launch](2026-09-04.md)

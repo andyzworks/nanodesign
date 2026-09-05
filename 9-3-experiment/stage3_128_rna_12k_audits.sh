@@ -1,0 +1,70 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+repo=/gpfs/projects/b1222/userdata/jianshu/code/nanodesign
+python="$repo/data/envs/rfd3na312/bin/python"
+checkpoint="$repo/data/runs/nanodesign-v1/stage3-128/rna-reference-6000/milestones/samples-00012000.pt"
+full_output="$repo/9-3-experiment/stage3_128_rna_12k_v2_audit.json"
+median_output="$repo/9-3-experiment/stage3_128_rna_12k_median_noise_context_audit.json"
+
+cd "$repo"
+export PYTHONPATH="$repo/src:$repo"
+export PYTHONNOUSERSITE=1
+export OMP_NUM_THREADS=4
+export MKL_NUM_THREADS=4
+export PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
+unset RFD3_LOW_MEMORY_MODE
+
+CHECKPOINT="$checkpoint" "$python" - <<'PY'
+import os
+import torch
+
+state = torch.load(os.environ["CHECKPOINT"], map_location="cpu", weights_only=False)
+records = state.get("milestone_records", [])
+if not any(record.get("global_samples_seen") == 12000 for record in records):
+    raise SystemExit("12K checkpoint does not contain a complete milestone record")
+PY
+
+full_status=0
+median_status=0
+
+if [[ ! -s "$full_output" ]]; then
+  CUDA_VISIBLE_DEVICES=0 "$python" scripts/audit_stage2_checkpoint.py \
+    --checkpoint "$checkpoint" \
+    --task rna \
+    --weight-source ema \
+    --generation-examples 8 \
+    --protocol configs/evaluation/overfit128_v2.json \
+    --output "$full_output" \
+    >9-3-experiment/stage3_128_rna_12k_v2_audit.log 2>&1 &
+  full_pid=$!
+else
+  full_pid=""
+fi
+
+if [[ ! -s "$median_output" ]]; then
+  CUDA_VISIBLE_DEVICES=1 "$python" scripts/audit_stage2_checkpoint.py \
+    --checkpoint "$checkpoint" \
+    --task rna \
+    --weight-source ema \
+    --generation-examples 0 \
+    --protocol configs/evaluation/overfit128_v2.json \
+    --diffusion-t 4.819107390595234 \
+    --output "$median_output" \
+    >9-3-experiment/stage3_128_rna_12k_median_noise_context_audit.log 2>&1 &
+  median_pid=$!
+else
+  median_pid=""
+fi
+
+if [[ -n "$full_pid" ]]; then
+  wait "$full_pid" || full_status=$?
+fi
+if [[ -n "$median_pid" ]]; then
+  wait "$median_pid" || median_status=$?
+fi
+
+if (( full_status != 0 || median_status != 0 )); then
+  echo "RNA 12K audit failed: full=$full_status median=$median_status" >&2
+  exit 1
+fi
