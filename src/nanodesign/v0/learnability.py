@@ -67,9 +67,7 @@ def load_frozen_panel(
         panel_size = int(task_spec["panel_size"])
         if panel_size < 1 or panel_size > len(rows):
             raise ValueError(f"{task}: invalid panel size {panel_size}")
-        selected = random.Random(seed + selection_seed_offset + task_index).sample(
-            rows, panel_size
-        )
+        selected = random.Random(seed + selection_seed_offset + task_index).sample(rows, panel_size)
         if _ids_sha256(selected) != task_spec["selected_sample_ids_sha256"]:
             raise ValueError(f"{task}: frozen panel sample IDs changed")
         selected_by_task[task] = selected
@@ -172,9 +170,7 @@ def evaluate_frozen_panel(
                         augment_coordinates=bool(protocol["coordinate_augmentation"]),
                     ),
                 )
-                batch = recursive_to_device(
-                    batch, device, non_blocking=device.type == "cuda"
-                )
+                batch = recursive_to_device(batch, device, non_blocking=device.type == "cuda")
                 # RFD3NA's local attention index builder uses random padding when a
                 # neighbourhood is undersubscribed.  The diffusion input seed alone
                 # is therefore insufficient: reset CPU and CUDA RNG immediately
@@ -184,9 +180,7 @@ def evaluate_frozen_panel(
                     torch.cuda.manual_seed_all(sample_seed)
                 atom_map = batch["f"]["atom_to_token_map"]
                 model.execution_mode = (
-                    "standard"
-                    if int(atom_map.numel()) <= STANDARD_MODE_MAX_ATOMS
-                    else "chunked"
+                    "standard" if int(atom_map.numel()) <= STANDARD_MODE_MAX_ATOMS else "chunked"
                 )
                 precision = (
                     torch.autocast(device_type="cuda", dtype=torch.bfloat16)

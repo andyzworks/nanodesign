@@ -11,9 +11,7 @@ from typing import Any
 import numpy as np
 
 
-def training_result_rows(
-    report: Mapping[str, Any], *, experiment: str
-) -> list[dict[str, Any]]:
+def training_result_rows(report: Mapping[str, Any], *, experiment: str) -> list[dict[str, Any]]:
     """Return one comparable row per trained task without discarding the full report."""
 
     history = report.get("history")
