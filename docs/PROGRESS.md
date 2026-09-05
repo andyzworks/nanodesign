@@ -35,12 +35,16 @@ median-noise audit now moves in the adverse direction, but only weakly: coordina
 RMSD is 2.6663 Angstrom with correct context versus 2.6673 shuffled and 2.6715
 detached. Near-clean recovery is 27.99% correct versus 27.89% shuffled and 28.19%
 detached. This is not yet a reliable context advantage, so the unchanged RNA run
-continues toward 6K.
+continues toward 6K. The completed 3K generation audit also confirms severe
+homopolymer collapse: all 8 generations have a 100% dominant-token fraction and only
+one unique token internally. The reported 8/8 distinct sequence tuples arise only
+from different output lengths and are not evidence of diversity.
 
 Next Action:
 Complete RNA 6K and its frozen context/generation audits, then decide the Stage-3
 gate. Binder and H3 require no further Stage-3 training; the RNA 3K checkpoint and
-both deterministic context audits are complete.
+both deterministic context audits are complete, and its failed generation-collapse
+control is now recorded.
 
 Last Updated:
-2026-09-04 20:15 CDT
+2026-09-04 20:39 CDT
