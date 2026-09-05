@@ -29,14 +29,18 @@ versus 28.71% shuffled and 22.24% detached, coordinate RMSD worsens from 0.296
 Angstrom to 0.321/0.477 Angstrom, and 8/8 finite distinct generations have a maximum
 dominant-token fraction of 47.06%. H3 also passes its task-level 128-example gate at
 6K: correct-context recovery is 42.79% versus 35.03% shuffled and 28.99% detached,
-with 8/8 distinct finite generations and no collapse. RNA-900 has a
-clear loss/recovery signal, but its median-noise audit still lacks a correct-context
-advantage (5.1211 Angstrom correct versus 5.1217 shuffled and 5.0733 detached); the
-original RNA run therefore continues toward 3K and 6K.
+with 8/8 distinct finite generations and no collapse. RNA reaches 27.83% validation
+recovery at 3K with validation loss 0.7010 and coordinate loss 0.5626. Its frozen 3K
+median-noise audit now moves in the adverse direction, but only weakly: coordinate
+RMSD is 2.6663 Angstrom with correct context versus 2.6673 shuffled and 2.6715
+detached. Near-clean recovery is 27.99% correct versus 27.89% shuffled and 28.19%
+detached. This is not yet a reliable context advantage, so the unchanged RNA run
+continues toward 6K.
 
 Next Action:
-Complete RNA 3K/6K and its frozen context/generation audits, then decide the Stage-3
-gate. Binder and H3 require no further Stage-3 training.
+Complete RNA 6K and its frozen context/generation audits, then decide the Stage-3
+gate. Binder and H3 require no further Stage-3 training; the RNA 3K checkpoint and
+both deterministic context audits are complete.
 
 Last Updated:
-2026-09-04 18:16 CDT
+2026-09-04 20:15 CDT
