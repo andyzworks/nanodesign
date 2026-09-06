@@ -156,6 +156,12 @@ def main() -> None:
     parser.add_argument("--weight-source", choices=("ema", "online"), default="ema")
     parser.add_argument("--generation-examples", type=int, default=8)
     parser.add_argument(
+        "--generation-start-index",
+        type=int,
+        default=0,
+        help="start index in the frozen panel for a split generation audit",
+    )
+    parser.add_argument(
         "--diffusion-t",
         type=float,
         default=None,
@@ -174,6 +180,8 @@ def main() -> None:
     args = parser.parse_args()
     if args.generation_examples < 0:
         raise ValueError("generation examples must be non-negative")
+    if args.generation_start_index < 0:
+        raise ValueError("generation start index must be non-negative")
     if args.diffusion_t is not None and args.diffusion_t <= 0:
         raise ValueError("diffusion timestep must be positive")
 
@@ -323,7 +331,10 @@ def main() -> None:
                 )
             )
 
-            if sample_index < min(args.generation_examples, len(rows)):
+            generation_stop_index = min(
+                args.generation_start_index + args.generation_examples, len(rows)
+            )
+            if args.generation_start_index <= sample_index < generation_stop_index:
                 generation_seed = int(protocol["seed"]) + 100_000 + sample_index
                 _seed(generation_seed, device)
                 with _precision(device):
@@ -380,6 +391,7 @@ def main() -> None:
             ),
         },
         "generation": {
+            "start_index": args.generation_start_index,
             "sample_count": len(generations),
             "distinct_sequence_count": len(set(generation_sequences)),
             "dominant_token_fraction_mean": (

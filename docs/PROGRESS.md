@@ -1,32 +1,30 @@
 # NanoDesign Progress
 
-Current Stage: STAGE_3
+Current Stage: STAGE_4
 Status: RUNNING
 
 Completed:
 - Stage 0: PASS
 - Stage 1: PASS
 - Stage 2: PASS
+- Stage 3: PASS
 
 Current Goal:
-Validate the retained Stage-2 reference recipe independently on 128 fixed
-samples for Binder, H3, and RNA without changing any other training variable.
+Establish formal Binder-only, H3-only, and RNA-only baselines, beginning at 6K
+samples seen per task and using the retained Stage-2 recipe.
 
 Latest Key Finding:
-Binder passes its 128-example task gate at 24K (28.31% validation recovery), and H3
-passes at 6K (43.89%). RNA improves continuously from 5.90% untrained recovery to
-37.02% at 12K while validation loss falls from 1.8746 to 0.5259. RNA generation
-collapse is resolved at 12K: all 8 sequences are distinct and finite, all use at
-least three base types, and mean/maximum dominant-token fractions are 67.24%/87.50%.
-At median training noise, RNA coordinate RMSD is 1.6435 Angstrom with correct context,
-1.6464 shuffled, and 1.7020 detached. Spatial detachment is clearly adverse, but the
-target-sequence-shuffle margin remains too weak for the stated Stage-3 gate. The
-unchanged RNA run therefore continues to 24K; Stage 3 remains RUNNING.
+Stage 3 passes. Binder reaches 29.38% frozen-panel recovery at 24K and H3 reaches
+42.79% at 6K. RNA reaches 41.18% recovery at 24K with validation loss 0.4757;
+8/8 generations are distinct and finite, every sequence uses at least three bases,
+and mean/maximum dominant fractions improve to 60.90%/78.79%. At median training
+noise, spatial detachment worsens RNA coordinate RMSD from 1.4187 to 1.4911 Angstrom
+and changes 10.10% of predictions, establishing 3D-context dependence.
 
 Next Action:
-Complete RNA 24K and its already-queued frozen context/generation audits, then decide
-the Stage-3 gate. Binder and H3 require no further Stage-3 training. Do not enter
-Stage 4 before `docs/STAGE_3_128_SAMPLE.md` is written with a PASS decision.
+Read the completed Stage-3 and Stage-2 Markdown records, inventory reusable
+single-task checkpoints/results, and execute only the missing Stage-4 formal
+single-task baseline work starting at 6K exposure per task.
 
 Last Updated:
-2026-09-05 16:51 CDT
+2026-09-05 20:52 CDT
