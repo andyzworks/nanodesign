@@ -1,0 +1,207 @@
+{
+  "checkpoint": {
+    "config_sha256": "25c710241a620ce6b50b4033a5cf15481c2549ce05fe3dd6ba6794595426514c",
+    "optimizer_steps": 6000,
+    "parameter_count": 6849538,
+    "path": "/gpfs/projects/b1222/userdata/jianshu/code/nanodesign/data/runs/single-task-transfer-seed17/antibody_h3-only/milestones/samples-00006000.pt",
+    "samples_seen": 6000,
+    "sha256": "c2bba3954ba04bd08ff6bce6ec5eaf5253e744830c576ee5b1e56ab32f0615e1",
+    "training_run_config": {
+      "adam_betas": [
+        0.9,
+        0.95
+      ],
+      "coordinate_augmentation": true,
+      "diffusion_batch_size": 16,
+      "ema_decay": 0.999,
+      "feature_cache_enabled": true,
+      "global_batch_size_complexes": 1,
+      "gradient_clip": 10.0,
+      "learning_rate": 0.0005,
+      "lr_decay_factor": 1.0,
+      "lr_decay_steps": 0,
+      "lr_schedule": "constant",
+      "lr_warmup_steps": 0,
+      "max_context_tokens": 384,
+      "milestone_samples": [
+        6000
+      ],
+      "seed": 17,
+      "sequence_mask_normalization": "per_design_token",
+      "size_packing_version": "catalog-polymer-slots-fixed4-v2",
+      "task_names": [
+        "antibody_h3"
+      ],
+      "validation_samples_per_task": 16,
+      "weight_decay": 0.0001,
+      "world_size": 1
+    },
+    "weight_source": "ema"
+  },
+  "device": "cuda:0",
+  "manifest_sha256": "6a194c2558c323c9f3f394a4df4ba9856c10a92f42c1ddb5e53ade03cc1cd584",
+  "peak_gpu_memory_bytes": 51788311040,
+  "precision": "bfloat16",
+  "protocol": "nanodesign.learnability.v2",
+  "protocol_sha256": "824df92a9cc5868dc6fc61f12febc5db52d9b1c3e880cd492fa7f9252e6e0e95",
+  "tasks": {
+    "antibody_h3": {
+      "execution_mode_counts": {
+        "standard": 128
+      },
+      "metrics": {
+        "coordinate_loss": {
+          "max": 0.24072855710983276,
+          "mean": 0.2123412803048268,
+          "min": 0.20159441232681274,
+          "std": 0.0064383749580618314
+        },
+        "coordinate_mse": {
+          "max": 0.010648756287992,
+          "mean": 0.003780750608711969,
+          "min": 0.0012618155451491475,
+          "std": 0.001533540031304209
+        },
+        "lddt_loss": {
+          "max": 0.1985674500465393,
+          "mean": 0.19721829053014517,
+          "min": 0.19649893045425415,
+          "std": 0.0003675536117832475
+        },
+        "loss": {
+          "max": 0.5844069123268127,
+          "mean": 0.42895001848228276,
+          "min": 0.32180875539779663,
+          "std": 0.05373918727469101
+        },
+        "seq_recovery": {
+          "max": 0.785714328289032,
+          "mean": 0.39205056871287525,
+          "min": 0.0,
+          "std": 0.1723223840424713
+        },
+        "sequence_ce": {
+          "max": 3.828125,
+          "mean": 2.166087339632213,
+          "min": 1.0906226634979248,
+          "std": 0.5382417916873622
+        },
+        "sequence_loss": {
+          "max": 0.3828125,
+          "mean": 0.2166087381192483,
+          "min": 0.10906226933002472,
+          "std": 0.05382418072971239
+        }
+      },
+      "sample_count": 128,
+      "sample_ids_sha256": "f22d3ddddad728317cfcce97e60479fe961e3454ba13e4e3a9d030c326bac73f",
+      "wall_time_seconds": 30.208619447425008
+    },
+    "protein_binder": {
+      "execution_mode_counts": {
+        "standard": 128
+      },
+      "metrics": {
+        "coordinate_loss": {
+          "max": 2.8000235557556152,
+          "mean": 1.474574996624142,
+          "min": 0.3671746253967285,
+          "std": 0.49035709834706537
+        },
+        "coordinate_mse": {
+          "max": 0.6391906142234802,
+          "mean": 0.3123123877448961,
+          "min": 0.04057760909199715,
+          "std": 0.12080036193335585
+        },
+        "lddt_loss": {
+          "max": 0.24326109886169434,
+          "mean": 0.22532545030117035,
+          "min": 0.20486414432525635,
+          "std": 0.007741657795465078
+        },
+        "loss": {
+          "max": 3.200023651123047,
+          "mean": 1.8121046447195113,
+          "min": 0.6753315925598145,
+          "std": 0.4985836494666086
+        },
+        "seq_recovery": {
+          "max": 0.3333333432674408,
+          "mean": 0.10919244051910937,
+          "min": 0.0,
+          "std": 0.07394463198033746
+        },
+        "sequence_ce": {
+          "max": 6.173982620239258,
+          "mean": 3.457008892670274,
+          "min": 2.3584465980529785,
+          "std": 0.6027698655159689
+        },
+        "sequence_loss": {
+          "max": 0.4000000059604645,
+          "mean": 0.3375296387821436,
+          "min": 0.2358446568250656,
+          "std": 0.040008251590026224
+        }
+      },
+      "sample_count": 128,
+      "sample_ids_sha256": "cfd1976f2e5837903253a6b4c2c4e6439f8feb7192e81a2513a86e9631e52750",
+      "wall_time_seconds": 16.270266024395823
+    },
+    "rna": {
+      "execution_mode_counts": {
+        "chunked": 5,
+        "standard": 78
+      },
+      "metrics": {
+        "coordinate_loss": {
+          "max": 8.33211612701416,
+          "mean": 2.0610212841665887,
+          "min": 0.5314803123474121,
+          "std": 1.5207869846189421
+        },
+        "coordinate_mse": {
+          "max": 2.0,
+          "mean": 0.45687101889087495,
+          "min": 0.08192386478185654,
+          "std": 0.37338569134044275
+        },
+        "lddt_loss": {
+          "max": 0.3321162462234497,
+          "mean": 0.23353722152939763,
+          "min": 0.20221984386444092,
+          "std": 0.028713663499333096
+        },
+        "loss": {
+          "max": 8.732115745544434,
+          "mean": 2.461021325674402,
+          "min": 0.9314802885055542,
+          "std": 1.5207869941277548
+        },
+        "seq_recovery": {
+          "max": 0.0,
+          "mean": 0.0,
+          "min": 0.0,
+          "std": 0.0
+        },
+        "sequence_ce": {
+          "max": 34.73125076293945,
+          "mean": 25.759007947990693,
+          "min": 9.428227424621582,
+          "std": 6.189891013204867
+        },
+        "sequence_loss": {
+          "max": 0.4000000059604645,
+          "mean": 0.4000000059604645,
+          "min": 0.4000000059604645,
+          "std": 0.0
+        }
+      },
+      "sample_count": 83,
+      "sample_ids_sha256": "3f88b2ee3711346ab820b6fe4a5257f5819b4500c456f54fe6d5798f8cdf8167",
+      "wall_time_seconds": 89.80566402431577
+    }
+  },
+  "wall_time_seconds": 136.28742627985775
+}

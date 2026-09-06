@@ -14,17 +14,18 @@ Establish formal Binder-only, H3-only, and RNA-only baselines, beginning at 6K
 samples seen per task and using the retained Stage-2 recipe.
 
 Latest Key Finding:
-Stage 3 passes. Binder reaches 29.38% frozen-panel recovery at 24K and H3 reaches
-42.79% at 6K. RNA reaches 41.18% recovery at 24K with validation loss 0.4757;
-8/8 generations are distinct and finite, every sequence uses at least three bases,
-and mean/maximum dominant fractions improve to 60.90%/78.79%. At median training
-noise, spatial detachment worsens RNA coordinate RMSD from 1.4187 to 1.4911 Angstrom
-and changes 10.10% of predictions, establishing 3D-context dependence.
+The existing formal single-task 6K checkpoints match the retained recipe. Frozen
+large-panel recovery is 15.63% Binder, 39.21% H3, and 30.28% RNA, all clearly above
+initialization. H3 generation is non-collapsed. Binder remains highly concentrated
+(91.30% maximum dominant-token fraction), while RNA still collapses (five of eight
+generations are homopolymers; 95.25%/100% mean/maximum dominance). Stage 4 therefore
+cannot pass at 6K.
 
 Next Action:
-Read the completed Stage-3 and Stage-2 Markdown records, inventory reusable
-single-task checkpoints/results, and execute only the missing Stage-4 formal
-single-task baseline work starting at 6K exposure per task.
+Continue only Binder-only and RNA-only from their exact 6K checkpoints to 12K with
+the unchanged retained recipe. Re-run frozen learnability, context, generation, and
+task-specific evaluation at 12K before deciding whether either task needs 18K. Do
+not retrain H3 unless later evidence requires it.
 
 Last Updated:
-2026-09-05 20:52 CDT
+2026-09-05 21:36 CDT

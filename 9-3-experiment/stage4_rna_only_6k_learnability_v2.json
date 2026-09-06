@@ -1,0 +1,207 @@
+{
+  "checkpoint": {
+    "config_sha256": "25c710241a620ce6b50b4033a5cf15481c2549ce05fe3dd6ba6794595426514c",
+    "optimizer_steps": 6000,
+    "parameter_count": 6849538,
+    "path": "/gpfs/projects/b1222/userdata/jianshu/code/nanodesign/data/runs/single-task-transfer-seed17/rna-only/milestones/samples-00006000.pt",
+    "samples_seen": 6000,
+    "sha256": "0c618916e0d246587578d70009371431bf2d890e7c4fd207c55de990785b44b4",
+    "training_run_config": {
+      "adam_betas": [
+        0.9,
+        0.95
+      ],
+      "coordinate_augmentation": true,
+      "diffusion_batch_size": 16,
+      "ema_decay": 0.999,
+      "feature_cache_enabled": true,
+      "global_batch_size_complexes": 1,
+      "gradient_clip": 10.0,
+      "learning_rate": 0.0005,
+      "lr_decay_factor": 1.0,
+      "lr_decay_steps": 0,
+      "lr_schedule": "constant",
+      "lr_warmup_steps": 0,
+      "max_context_tokens": 384,
+      "milestone_samples": [
+        6000
+      ],
+      "seed": 17,
+      "sequence_mask_normalization": "per_design_token",
+      "size_packing_version": "catalog-polymer-slots-fixed4-v2",
+      "task_names": [
+        "rna"
+      ],
+      "validation_samples_per_task": 16,
+      "weight_decay": 0.0001,
+      "world_size": 1
+    },
+    "weight_source": "ema"
+  },
+  "device": "cuda:0",
+  "manifest_sha256": "6a194c2558c323c9f3f394a4df4ba9856c10a92f42c1ddb5e53ade03cc1cd584",
+  "peak_gpu_memory_bytes": 51788311040,
+  "precision": "bfloat16",
+  "protocol": "nanodesign.learnability.v2",
+  "protocol_sha256": "824df92a9cc5868dc6fc61f12febc5db52d9b1c3e880cd492fa7f9252e6e0e95",
+  "tasks": {
+    "antibody_h3": {
+      "execution_mode_counts": {
+        "standard": 128
+      },
+      "metrics": {
+        "coordinate_loss": {
+          "max": 0.47645577788352966,
+          "mean": 0.321400334010832,
+          "min": 0.24494914710521698,
+          "std": 0.034919857765959905
+        },
+        "coordinate_mse": {
+          "max": 0.06844902783632278,
+          "mean": 0.030294011208752636,
+          "min": 0.011722530238330364,
+          "std": 0.008530432717211123
+        },
+        "lddt_loss": {
+          "max": 0.20380735397338867,
+          "mean": 0.2002242966555059,
+          "min": 0.19805902242660522,
+          "std": 0.0010312627136398118
+        },
+        "loss": {
+          "max": 0.8764557838439941,
+          "mean": 0.7214003358967602,
+          "min": 0.6449491381645203,
+          "std": 0.034919856814459506
+        },
+        "seq_recovery": {
+          "max": 0.0,
+          "mean": 0.0,
+          "min": 0.0,
+          "std": 0.0
+        },
+        "sequence_ce": {
+          "max": 20.548076629638672,
+          "mean": 19.913495659828186,
+          "min": 19.321430206298828,
+          "std": 0.24404139013130416
+        },
+        "sequence_loss": {
+          "max": 0.4000000059604645,
+          "mean": 0.4000000059604645,
+          "min": 0.4000000059604645,
+          "std": 0.0
+        }
+      },
+      "sample_count": 128,
+      "sample_ids_sha256": "f22d3ddddad728317cfcce97e60479fe961e3454ba13e4e3a9d030c326bac73f",
+      "wall_time_seconds": 30.207533547654748
+    },
+    "protein_binder": {
+      "execution_mode_counts": {
+        "standard": 128
+      },
+      "metrics": {
+        "coordinate_loss": {
+          "max": 2.508899211883545,
+          "mean": 2.070947087369859,
+          "min": 1.1491687297821045,
+          "std": 0.26208530558697524
+        },
+        "coordinate_mse": {
+          "max": 0.5646916031837463,
+          "mean": 0.45757376006804407,
+          "min": 0.23187048733234406,
+          "std": 0.06431190699304738
+        },
+        "lddt_loss": {
+          "max": 0.2508677840232849,
+          "mean": 0.2406520419754088,
+          "min": 0.22168684005737305,
+          "std": 0.005484553016567003
+        },
+        "loss": {
+          "max": 2.9088993072509766,
+          "mean": 2.4709471659734845,
+          "min": 1.5491687059402466,
+          "std": 0.26208533296236414
+        },
+        "seq_recovery": {
+          "max": 0.0,
+          "mean": 0.0,
+          "min": 0.0,
+          "std": 0.0
+        },
+        "sequence_ce": {
+          "max": 20.47222328186035,
+          "mean": 19.767384588718414,
+          "min": 16.810546875,
+          "std": 0.4339234302831206
+        },
+        "sequence_loss": {
+          "max": 0.4000000059604645,
+          "mean": 0.4000000059604645,
+          "min": 0.4000000059604645,
+          "std": 0.0
+        }
+      },
+      "sample_count": 128,
+      "sample_ids_sha256": "cfd1976f2e5837903253a6b4c2c4e6439f8feb7192e81a2513a86e9631e52750",
+      "wall_time_seconds": 16.201682631857693
+    },
+    "rna": {
+      "execution_mode_counts": {
+        "chunked": 5,
+        "standard": 78
+      },
+      "metrics": {
+        "coordinate_loss": {
+          "max": 1.3608911037445068,
+          "mean": 0.46041401341018906,
+          "min": 0.22941629588603973,
+          "std": 0.20672957438843942
+        },
+        "coordinate_mse": {
+          "max": 0.2801528573036194,
+          "mean": 0.063021353681583,
+          "min": 0.007773173041641712,
+          "std": 0.049419275117959835
+        },
+        "lddt_loss": {
+          "max": 0.24027979373931885,
+          "mean": 0.20832860757069416,
+          "min": 0.19765228033065796,
+          "std": 0.009400814267824947
+        },
+        "loss": {
+          "max": 1.4951003789901733,
+          "mean": 0.597947689065014,
+          "min": 0.36945536732673645,
+          "std": 0.2059747072165625
+        },
+        "seq_recovery": {
+          "max": 0.7777777910232544,
+          "mean": 0.3027940506048231,
+          "min": 0.0,
+          "std": 0.12420068904902962
+        },
+        "sequence_ce": {
+          "max": 1.5048828125,
+          "mean": 1.3753366872488735,
+          "min": 1.2307692766189575,
+          "std": 0.043509088713283295
+        },
+        "sequence_loss": {
+          "max": 0.15048828721046448,
+          "mean": 0.13753367242324782,
+          "min": 0.12307693064212799,
+          "std": 0.004350908937752647
+        }
+      },
+      "sample_count": 83,
+      "sample_ids_sha256": "3f88b2ee3711346ab820b6fe4a5257f5819b4500c456f54fe6d5798f8cdf8167",
+      "wall_time_seconds": 90.43936853203923
+    }
+  },
+  "wall_time_seconds": 136.85086139012128
+}
