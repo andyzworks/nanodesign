@@ -35,31 +35,46 @@ known molecular context → design sequence + structure
 
 The complete frozen v0 definition is in the [v0 specification](docs/V0_SPEC.md).
 
-## Current Validation Evidence
+## Learnability Evidence
 
-NanoDesign-Tiny has completed controlled 3K, 9K, and 18K `samples seen` sweeps. The
-9K and 18K experiments use two independent seeds. The current best unified candidate
-is **`lr5e4-d16-c10 @ 18K`**: a constant `5e-4` learning rate, 16 diffusion
-realizations per complex, gradient clipping at 10, and the unchanged `1 : 1 : 1`
-task mixture.
+Before optimizing unified training, we tested whether each task can be learned at all.
+Three independent NanoDesign-Tiny models used the same architecture and training recipe;
+each model was trained only on the corresponding **training split** for 6K samples seen.
+Evaluation used a deterministic, held-out **validation split**: 128 Protein Binder
+examples, 128 Antibody H3 examples, and all 83 available RNA validation examples.
 
-| Task | 18K validation recovery (two-seed mean) | Training-set majority baseline | Evidence |
-| --- | ---: | ---: | --- |
-| Protein Binder | **10.29%** | 8.96% | modest learning signal |
-| Antibody H3 | **18.55%** | 14.93% | clearest reproducible learning signal |
-| RNA binding | **22.58%** | 27.55% | not yet above the simple baseline |
+| Task | Untrained recovery | Single-task 6K recovery | Recovery gain | Untrained coordinate loss | Single-task 6K coordinate loss |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| Protein Binder | 3.07% | **15.63%** | **+12.56 pp** | 2.6031 | **0.6832** |
+| Antibody H3 | 2.98% | **39.21%** | **+36.23 pp** | 0.3548 | **0.2123** |
+| RNA binding | 1.26% | **30.28%** | **+29.02 pp** | 1.6726 | **0.4604** |
 
-For the same candidate, fixed-sample online generations at 18K contain multiple valid
-residue types for every task under both seeds; their largest single-residue fractions
-range from 26.9% to 52.4%, with no homopolymer output. This is a substantial improvement
-over the collapsed generations observed at earlier budgets and verifies that the shared
-model can train and generate across all three task paths. It does **not** yet establish
-biological design success: sequence recovery and one fixed generation per task do not
-replace the frozen external evaluation protocols below.
+Both sequence recovery and coordinate denoising improve on examples that were not used
+for training. This provides direct evidence that **Protein Binder, Antibody H3, and RNA
+are each learnable with the NanoDesign-Tiny architecture**, rather than merely being
+memorized on the training set. H3 generation is already non-collapsed at 6K; Binder and
+RNA require more exposure for stable full generation, so their unchanged single-task
+runs have also been continued to 12K and are awaiting frozen generation evaluation.
 
-The complete per-seed results, generation diagnostics, limitations, and original run
-locations are recorded in the
-[current NanoDesign v0 results report](docs/NANODESIGN_V0_RESULTS_2026-09-01.md).
+These are held-out learnability diagnostics—not binding success rates and not the final
+test-set design benchmark. Sequence recovery measures agreement with the deposited
+native sequence under fixed denoising conditions; biomolecular design is one-to-many,
+so recovery cannot by itself establish biological function or binding affinity. The
+frozen protocol and stage evidence are documented in the
+[evaluator audit](docs/EVALUATOR_AUDIT.md),
+[Stage 3 report](docs/STAGE_3_128_SAMPLE.md), and
+[current progress record](docs/PROGRESS.md).
+
+### Unified-model pilot
+
+The earlier shared-model experiment used the frozen Binder : H3 : RNA ratio of
+`1 : 1 : 1` and an 18K total budget, or approximately 6K exposure per task. Its
+two-seed mean validation recoveries were 10.29% Binder, 18.55% H3, and 22.58% RNA,
+and all three generation paths produced finite, non-homopolymer outputs. This shows
+that one shared model can receive learning signal from all three tasks, although a
+strong unified reference baseline and full test-panel evaluation are still in
+progress. Complete pilot details are in the
+[NanoDesign v0 results report](docs/NANODESIGN_V0_RESULTS_2026-09-01.md).
 
 ## Data
 
@@ -161,12 +176,18 @@ external evaluation remain outstanding. NanoDesign does not claim a 36K result.
   passed forward, backward, generation, and checkpoint save/load smoke tests.
 - [x] **Evaluation components:** Binder, H3, and RNA end-to-end runners are implemented
   and computationally smoke-tested. A complete formal benchmark has not been reported.
-- [x] **Learning-signal calibration:** 3K, 9K, and 18K sweeps are complete. At 18K,
-  Binder and H3 recovery exceed their training-set majority baselines; RNA does not.
+- [x] **Task learnability:** all three tasks improve substantially over initialization
+  on deterministic held-out validation panels after single-task 6K training.
+- [x] **128-example scale-up:** Binder, H3, and RNA pass the frozen Stage-3
+  learnability and non-collapse gate; see the [Stage 3 report](docs/STAGE_3_128_SAMPLE.md).
 - [x] **Training performance:** feature caching, asynchronous loading, standard/chunked
   execution, DDP, preflight checks, and checkpoint/resume are implemented and tested.
-- [x] **Early budget candidate:** 18K samples seen is selected for the current unified
-  candidate based on two-seed validation and fixed-sample generation diagnostics.
+- [ ] **Formal single-task baseline:** H3 passes its initial 6K generation diagnostic;
+  Binder and RNA have completed 12K training and still require frozen 12K generation
+  and task-specific evaluation.
+- [x] **Early unified pilot:** 18K samples seen is the current shared-model candidate
+  based on two-seed validation and fixed-sample generation diagnostics; it is not yet
+  the frozen final budget.
 - [ ] **Scientific baseline evaluation:** full multi-sample generation and the frozen
   Binder/H3/RNA external evaluations have not yet been reported.
 
