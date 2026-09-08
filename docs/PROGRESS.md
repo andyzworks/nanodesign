@@ -14,18 +14,18 @@ Establish formal Binder-only, H3-only, and RNA-only baselines, beginning at 6K
 samples seen per task and using the retained Stage-2 recipe.
 
 Latest Key Finding:
-The existing formal single-task 6K checkpoints match the retained recipe. Frozen
-large-panel recovery is 15.63% Binder, 39.21% H3, and 30.28% RNA, all clearly above
-initialization. H3 generation is non-collapsed. Binder remains highly concentrated
-(91.30% maximum dominant-token fraction), while RNA still collapses (five of eight
-generations are homopolymers; 95.25%/100% mean/maximum dominance). Stage 4 therefore
-cannot pass at 6K.
+Binder-only and RNA-only continuation from 6K to 12K completed without changing the
+frozen recipe. On the existing 16-example milestone validation, Binder improves from
+8.83% recovery / 1.7207 loss at 6K to 17.09% / 0.7766 at 12K. RNA improves from
+21.91% / 0.8749 to 27.17% / 0.5372. These are encouraging training-loop signals,
+but the frozen large-panel, context, generation-collapse, and task-specific 12K
+evaluations have not yet been run, so Stage 4 remains RUNNING.
 
 Next Action:
-Continue only Binder-only and RNA-only from their exact 6K checkpoints to 12K with
-the unchanged retained recipe. Re-run frozen learnability, context, generation, and
-task-specific evaluation at 12K before deciding whether either task needs 18K. Do
-not retrain H3 unless later evidence requires it.
+Evaluate the completed Binder-only and RNA-only 12K checkpoints with the frozen
+large-panel, context, generation-collapse, and task-specific protocols. Only after
+those results decide whether either task must continue to 18K. Do not retrain H3
+unless later evidence requires it.
 
 Last Updated:
-2026-09-05 21:36 CDT
+2026-09-07 21:35 CDT
